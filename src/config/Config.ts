@@ -3,7 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import ini from 'ini';
+
+// Use require for ini module to avoid TypeScript issues
+const ini = require('ini');
 
 export interface DomainConfig {
   domain: string;
