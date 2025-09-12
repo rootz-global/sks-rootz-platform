@@ -7,6 +7,31 @@ export class BlockchainService {
   private serviceWallet: ethers.Wallet | null = null;
   private contracts: { [key: string]: ethers.Contract } = {};
 
+  // Gas pricing utility - Get current network gas prices
+  private async getGasPricing(): Promise<{ maxFeePerGas: ethers.BigNumber; maxPriorityFeePerGas: ethers.BigNumber }> {
+    try {
+      const feeData = await this.provider.getFeeData();
+      
+      // Ensure minimum gas prices for Polygon Amoy network
+      const minGasPrice = ethers.utils.parseUnits('30', 'gwei'); // 30 Gwei minimum
+      const minPriorityFee = ethers.utils.parseUnits('25', 'gwei'); // 25 Gwei minimum
+      
+      const maxFeePerGas = feeData.maxFeePerGas?.gt(minGasPrice) ? feeData.maxFeePerGas : minGasPrice;
+      const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas?.gt(minPriorityFee) ? feeData.maxPriorityFeePerGas : minPriorityFee;
+      
+      console.log(`[GAS] Network gas pricing: maxFee=${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} Gwei, priority=${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} Gwei`);
+      
+      return { maxFeePerGas, maxPriorityFeePerGas };
+    } catch (error) {
+      console.warn('[GAS] Failed to get network gas pricing, using defaults:', error);
+      // Fallback to safe defaults for Polygon Amoy
+      return {
+        maxFeePerGas: ethers.utils.parseUnits('35', 'gwei'),
+        maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei')
+      };
+    }
+  }
+
   // Address validation utility
   private validateAndFormatAddress(address: string): string {
     try {
@@ -120,6 +145,9 @@ export class BlockchainService {
       console.log(`[REGISTER] Step 4: User ${validAddress} is NOT registered, proceeding with registration...`);
       console.log(`[REGISTER] Step 5: Attempting blockchain transaction for ${validAddress} with email: ${primaryEmail}`);
 
+      // Get proper gas pricing for network
+      const gasPricing = await this.getGasPricing();
+
       // Register with basic parameters - primary email only, no corporate wallet
       const tx = await this.contracts.registration.registerEmailWallet(
         primaryEmail,           // primaryEmail
@@ -130,7 +158,9 @@ export class BlockchainService {
         false,                 // autoProcessCC
         { 
           value: ethers.utils.parseEther("0.001"), // registration fee (small amount)
-          gasLimit: 500000  // Manual gas limit to avoid estimation issues
+          gasLimit: 500000,  // Manual gas limit to avoid estimation issues
+          maxFeePerGas: gasPricing.maxFeePerGas,
+          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
         }
       );
       
@@ -154,10 +184,15 @@ export class BlockchainService {
       }
 
       const validAddress = this.validateAndFormatAddress(userAddress);
+      const gasPricing = await this.getGasPricing();
       
       const tx = await this.contracts.registration.depositCredits(
         validAddress,
-        { value: ethers.utils.parseEther(amount) }
+        { 
+          value: ethers.utils.parseEther(amount),
+          maxFeePerGas: gasPricing.maxFeePerGas,
+          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+        }
       );
       
       await tx.wait();
@@ -192,10 +227,14 @@ export class BlockchainService {
 
       // Test with a simple transaction (send 0.001 POL to self)
       console.log('[TEST] Attempting simple transaction...');
+      const gasPricing = await this.getGasPricing();
+      
       const tx = await this.serviceWallet.sendTransaction({
         to: this.serviceWallet.address,
         value: ethers.utils.parseEther('0.001'),
-        gasLimit: 21000
+        gasLimit: 21000,
+        maxFeePerGas: gasPricing.maxFeePerGas,
+        maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
       });
       
       console.log(`[TEST] Transaction submitted: ${tx.hash}`);
