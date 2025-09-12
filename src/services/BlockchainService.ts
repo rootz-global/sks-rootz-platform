@@ -140,6 +140,59 @@ export class BlockchainService {
     }
   }
 
+  async getUserRegistration(userAddress: string): Promise<any> {
+    try {
+      if (!this.contracts.registration) {
+        console.warn('⚠️ Registration contract not available');
+        return null;
+      }
+      
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const registration = await this.contracts.registration.getRegistration(validAddress);
+      
+      return {
+        registrationId: registration.registrationId,
+        primaryEmail: registration.primaryEmail,
+        parentCorporateWallet: registration.parentCorporateWallet,
+        autoProcessCC: registration.autoProcessCC,
+        registeredAt: registration.registeredAt.toNumber(),
+        isActive: registration.isActive,
+        creditBalance: registration.creditBalance.toNumber()
+      };
+    } catch (error) {
+      console.error('❌ Error getting user registration:', error);
+      return null;
+    }
+  }
+
+  async depositCredits(userAddress: string, amount: string): Promise<boolean> {
+    try {
+      if (!this.serviceWallet || !this.contracts.registration) {
+        console.error('❌ Service wallet or registration contract not available');
+        return false;
+      }
+
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const gasPricing = await this.getGasPricing();
+      
+      const tx = await this.contracts.registration.depositCredits(
+        validAddress,
+        { 
+          value: ethers.utils.parseEther(amount),
+          maxFeePerGas: gasPricing.maxFeePerGas,
+          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+        }
+      );
+      
+      await tx.wait();
+      console.log(`💰 Deposited credits for ${validAddress}. TX: ${tx.hash}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error depositing credits:', error);
+      return false;
+    }
+  }
+
   async testBlockchainWrite(): Promise<boolean> {
     try {
       if (!this.serviceWallet) {
