@@ -23,15 +23,20 @@ export class EmailWalletController extends Controller {
         return;
       }
       
-      // Register user on blockchain
-      const success = await blockchainService.registerUser(userAddress);
+      // Register user on blockchain with a basic email
+      const email = `${userAddress.toLowerCase()}@temp.rootz.global`;
+      const success = await blockchainService.registerEmailWallet(userAddress, email);
       if (!success) {
         this.sendError(res, 'Blockchain registration failed', 500);
         return;
       }
       
+      // Deposit initial credits (60 credits = ~0.06 ETH worth)
+      await blockchainService.depositCredits(userAddress, "0.006");
+      
       const result = {
         userAddress,
+        email,
         credits: 60,
         registrationDate: new Date().toISOString(),
         isActive: true,
@@ -59,11 +64,13 @@ export class EmailWalletController extends Controller {
       const blockchainService = new BlockchainService(config);
       const credits = await blockchainService.getUserCredits(userAddress);
       const isRegistered = await blockchainService.isUserRegistered(userAddress);
+      const registration = await blockchainService.getUserRegistration(userAddress);
       
       const result = {
         userAddress,
         credits,
         isRegistered,
+        registration,
         lastUpdated: new Date().toISOString(),
         domain
       };
