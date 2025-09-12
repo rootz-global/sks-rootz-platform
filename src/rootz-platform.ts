@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { Config } from './config/Config.js';
 import { StatusController } from './controllers/StatusController.js';
+import { EmailWalletController } from './controllers/EmailWalletController.js';
 
 export class RootzPlatform {
   private static instance: RootzPlatform;
@@ -37,6 +38,10 @@ export class RootzPlatform {
   // Attach to existing Express app (EPISTERY pattern)
   public async attach(app: express.Application): Promise<void> {
     console.log('🔗 Attaching SKS Rootz Platform to existing app...');
+    
+    // Add body parsing middleware
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
     
     // Domain resolution middleware (EPISTERY pattern)
     app.use(this.domainResolutionMiddleware.bind(this));
@@ -72,6 +77,11 @@ export class RootzPlatform {
     router.get('/health', (req: Request, res: Response) => {
       res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
     });
+    
+    // Email Wallet routes
+    const emailWalletController = new EmailWalletController();
+    router.post('/email-wallet/register', emailWalletController.register.bind(emailWalletController));
+    router.get('/email-wallet/credits/:userAddress', emailWalletController.getCreditBalance.bind(emailWalletController));
     
     return router;
   }
