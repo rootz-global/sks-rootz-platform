@@ -1,0 +1,80 @@
+{
+  "name": "sks-rootz-platform",
+  "version": "1.0.0",
+  "description": "SKS Rootz Platform - EPISTERY-style unified services platform",
+  "main": "dist/index.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rootz-global/sks-rootz-platform.git"
+  },
+  "author": "Rootz Global",
+  "license": "MIT",
+  "keywords": [
+    "blockchain",
+    "email-wallet",
+    "secrets-management",
+    "ai-data-wallet",
+    "epistery",
+    "microservices",
+    "typescript"
+  ],
+  "scripts": {
+    "build": "tsc && npm run build:client",
+    "build:client": "rollup -c rollup.config.js",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "setup:ubuntu": "sudo ./scripts/setup/ubuntu-server-setup.sh",
+    "deploy": "./scripts/deploy/deploy.sh",
+    "migrate": "node dist/database/migrate.js",
+    "seed": "node dist/database/seed.js",
+    "backup": "./scripts/maintenance/backup-database.sh"
+  },
+  "dependencies": {
+    "express": "4.18.2",
+    "ethers": "5.8.0",
+    "ini": "5.0.0",
+    "cookie-parser": "1.4.7",
+    "cors": "2.8.5",
+    "helmet": "7.0.0",
+    "winston": "3.10.0",
+    "pg": "8.11.0",
+    "redis": "4.6.0",
+    "dotenv": "17.2.2",
+    "joi": "17.9.0",
+    "jsonwebtoken": "9.0.2",
+    "bcryptjs": "2.4.3",
+    "node-fetch": "3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.4.0",
+    "@types/express": "4.17.17",
+    "@types/cors": "2.8.13",
+    "@types/cookie-parser": "1.4.3",
+    "@types/jsonwebtoken": "9.0.2",
+    "@types/bcryptjs": "2.4.2",
+    "@types/pg": "8.10.0",
+    "@types/jest": "29.5.0",
+    "typescript": "5.0.0",
+    "ts-node": "10.9.0",
+    "ts-node-dev": "2.0.0",
+    "rollup": "3.26.0",
+    "@rollup/plugin-typescript": "11.1.2",
+    "@rollup/plugin-terser": "0.4.3",
+    "jest": "29.6.0",
+    "ts-jest": "29.1.0",
+    "eslint": "8.45.0",
+    "@typescript-eslint/eslint-plugin": "6.0.0",
+    "@typescript-eslint/parser": "6.0.0",
+    "prettier": "3.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
