@@ -81,6 +81,7 @@ export class RootzPlatform {
     // Email Wallet routes
     const emailWalletController = new EmailWalletController();
     router.post('/email-wallet/register', emailWalletController.register.bind(emailWalletController));
+    router.get('/email-wallet/balance/:userAddress', emailWalletController.getCreditBalance.bind(emailWalletController));
     router.get('/email-wallet/credits/:userAddress', emailWalletController.getCreditBalance.bind(emailWalletController));
     
     return router;
