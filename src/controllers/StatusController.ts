@@ -16,14 +16,19 @@ export class StatusController extends Controller {
         timestamp: new Date().toISOString(),
         domain,
         services: {
-          emailWallet: config?.services?.emailWallet || false,
+          emailWallet: true, // Email wallet service is always available
           secretsManagement: config?.services?.secretsManagement || false,
           aiWallet: config?.services?.aiWallet || false
         },
         endpoints: {
           health: '/.rootz/health',
           status: '/.rootz/status',
-          clientLibrary: '/.rootz/lib/rootz-client.js'
+          clientLibrary: '/.rootz/lib/rootz-client.js',
+          emailWallet: {
+            register: '/.rootz/email-wallet/register',
+            balance: '/.rootz/email-wallet/balance/:userAddress',
+            credits: '/.rootz/email-wallet/credits/:userAddress'
+          }
         }
       };
 
