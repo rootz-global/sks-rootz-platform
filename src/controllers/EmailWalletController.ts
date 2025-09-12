@@ -13,10 +13,16 @@ export class EmailWalletController extends Controller {
       const domain = this.getDomainFromRequest(req);
       const config = this.getConfigFromRequest(req);
       
+      // Validate required fields
+      if (!userAddress) {
+        this.sendError(res, 'User address is required', 400);
+        return;
+      }
+      
       // Initialize blockchain service with domain config
       const blockchainService = new BlockchainService(config);
       
-      // Check if user is already registered
+      // Check if user is already registered (this will validate address format)
       const isRegistered = await blockchainService.isUserRegistered(userAddress);
       if (isRegistered) {
         this.sendError(res, 'User already registered', 400);
@@ -49,6 +55,13 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('Registration error:', error);
+      
+      // Handle specific error types
+      if (error instanceof Error && error.message.includes('Invalid Ethereum address')) {
+        this.sendError(res, error.message, 400);
+        return;
+      }
+      
       this.sendError(res, 'Registration failed', 500);
     }
   }
@@ -80,6 +93,13 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('Credit balance error:', error);
+      
+      // Handle specific error types
+      if (error instanceof Error && error.message.includes('Invalid Ethereum address')) {
+        this.sendError(res, error.message, 400);
+        return;
+      }
+      
       this.sendError(res, 'Failed to get credit balance', 500);
     }
   }

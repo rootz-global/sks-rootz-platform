@@ -7,6 +7,16 @@ export class BlockchainService {
   private serviceWallet: ethers.Wallet | null = null;
   private contracts: { [key: string]: ethers.Contract } = {};
 
+  // Address validation utility
+  private validateAndFormatAddress(address: string): string {
+    try {
+      // This will throw if invalid and return checksummed address if valid
+      return ethers.utils.getAddress(address.toLowerCase());
+    } catch (error) {
+      throw new Error(`Invalid Ethereum address: ${address}`);
+    }
+  }
+
   constructor(private config: any) {
     this.provider = new ethers.providers.JsonRpcProvider(config.blockchain?.rpc_url);
     this.initializeServiceWallet();
@@ -47,7 +57,8 @@ export class BlockchainService {
   async isUserRegistered(userAddress: string): Promise<boolean> {
     try {
       if (!this.contracts.registration) return false;
-      return await this.contracts.registration.isRegistered(userAddress);
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      return await this.contracts.registration.isRegistered(validAddress);
     } catch (error) {
       console.error('Error checking user registration:', error);
       return false;
@@ -57,7 +68,8 @@ export class BlockchainService {
   async getUserCredits(userAddress: string): Promise<number> {
     try {
       if (!this.contracts.registration) return 0;
-      const credits = await this.contracts.registration.getCreditBalance(userAddress);
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const credits = await this.contracts.registration.getCreditBalance(validAddress);
       return credits.toNumber();
     } catch (error) {
       console.error('Error getting user credits:', error);
@@ -68,7 +80,8 @@ export class BlockchainService {
   async getUserRegistration(userAddress: string): Promise<any> {
     try {
       if (!this.contracts.registration) return null;
-      const registration = await this.contracts.registration.getRegistration(userAddress);
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const registration = await this.contracts.registration.getRegistration(validAddress);
       return {
         registrationId: registration.registrationId,
         primaryEmail: registration.primaryEmail,
@@ -91,6 +104,16 @@ export class BlockchainService {
         return false;
       }
 
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      console.log(`Attempting to register ${validAddress} with email: ${primaryEmail}`);
+
+      // Check if already registered first
+      const isAlreadyRegistered = await this.contracts.registration.isRegistered(validAddress);
+      if (isAlreadyRegistered) {
+        console.log(`User ${validAddress} is already registered`);
+        return false; // Don't attempt registration if already registered
+      }
+
       // Register with basic parameters - primary email only, no corporate wallet
       const tx = await this.contracts.registration.registerEmailWallet(
         primaryEmail,           // primaryEmail
@@ -104,7 +127,7 @@ export class BlockchainService {
       
       await tx.wait();
       
-      console.log(`User ${userAddress} registered successfully. TX: ${tx.hash}`);
+      console.log(`User ${validAddress} registered successfully. TX: ${tx.hash}`);
       return true;
     } catch (error) {
       console.error('Error registering user:', error);
@@ -119,14 +142,16 @@ export class BlockchainService {
         return false;
       }
 
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      
       const tx = await this.contracts.registration.depositCredits(
-        userAddress,
+        validAddress,
         { value: ethers.utils.parseEther(amount) }
       );
       
       await tx.wait();
       
-      console.log(`Deposited credits for ${userAddress}. TX: ${tx.hash}`);
+      console.log(`Deposited credits for ${validAddress}. TX: ${tx.hash}`);
       return true;
     } catch (error) {
       console.error('Error depositing credits:', error);
