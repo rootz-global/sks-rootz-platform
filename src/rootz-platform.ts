@@ -84,6 +84,9 @@ export class RootzPlatform {
     router.get('/email-wallet/balance/:userAddress', emailWalletController.getCreditBalance.bind(emailWalletController));
     router.get('/email-wallet/credits/:userAddress', emailWalletController.getCreditBalance.bind(emailWalletController));
     
+    // Test endpoints
+    router.get('/test/blockchain-write', emailWalletController.testBlockchainWrite.bind(emailWalletController));
+    
     return router;
   }
 }
