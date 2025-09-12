@@ -24,13 +24,25 @@ logs/
 .env.test.local
 .env.production.local
 
-# Configuration files with secrets (EPISTERY pattern)
+# EPISTERY configuration files with secrets (NEVER commit these)
 config/**/*.ini
 !config/templates/*.template.ini
 !config/examples/
-
-# EPISTERY configuration directory (should be in user home)
 .data-wallet/
+**/.data-wallet/
+**/config.ini
+~/.data-wallet/
+/home/*/.data-wallet/
+
+# Server-specific configuration directories
+/home/ubuntu/.data-wallet/
+/root/.data-wallet/
+
+# Any files containing private keys or secrets
+*private*key*
+*secret*
+*password*
+*.env.*
 
 # Database
 *.db
