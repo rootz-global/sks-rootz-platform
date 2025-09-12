@@ -105,14 +105,20 @@ export class BlockchainService {
       }
 
       const validAddress = this.validateAndFormatAddress(userAddress);
-      console.log(`Attempting to register ${validAddress} with email: ${primaryEmail}`);
+      console.log(`[REGISTER] Step 1: Validating registration for ${validAddress}`);
 
-      // Check if already registered first
+      // CRITICAL: Check if already registered BEFORE attempting any transaction
+      console.log(`[REGISTER] Step 2: Checking if ${validAddress} is already registered...`);
       const isAlreadyRegistered = await this.contracts.registration.isRegistered(validAddress);
+      console.log(`[REGISTER] Step 3: Registration check result for ${validAddress}: ${isAlreadyRegistered}`);
+      
       if (isAlreadyRegistered) {
-        console.log(`User ${validAddress} is already registered`);
-        return false; // Don't attempt registration if already registered
+        console.log(`[REGISTER] ABORT: User ${validAddress} is already registered - skipping transaction`);
+        return false; // This should prevent any blockchain transaction
       }
+
+      console.log(`[REGISTER] Step 4: User ${validAddress} is NOT registered, proceeding with registration...`);
+      console.log(`[REGISTER] Step 5: Attempting blockchain transaction for ${validAddress} with email: ${primaryEmail}`);
 
       // Register with basic parameters - primary email only, no corporate wallet
       const tx = await this.contracts.registration.registerEmailWallet(
@@ -122,15 +128,20 @@ export class BlockchainService {
         [],                    // authorizationTxs (empty array)
         [],                    // whitelistedDomains (empty array)
         false,                 // autoProcessCC
-        { value: ethers.utils.parseEther("0.001") } // registration fee (small amount)
+        { 
+          value: ethers.utils.parseEther("0.001"), // registration fee (small amount)
+          gasLimit: 500000  // Manual gas limit to avoid estimation issues
+        }
       );
       
-      await tx.wait();
+      console.log(`[REGISTER] Step 6: Transaction submitted: ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(`[REGISTER] Step 7: Transaction confirmed in block ${receipt.blockNumber}`);
       
-      console.log(`User ${validAddress} registered successfully. TX: ${tx.hash}`);
+      console.log(`[REGISTER] SUCCESS: User ${validAddress} registered successfully. TX: ${tx.hash}`);
       return true;
     } catch (error) {
-      console.error('Error registering user:', error);
+      console.error('[REGISTER] ERROR:', error);
       return false;
     }
   }
@@ -155,6 +166,46 @@ export class BlockchainService {
       return true;
     } catch (error) {
       console.error('Error depositing credits:', error);
+      return false;
+    }
+  }
+
+  // TEST METHOD: Simple blockchain write test
+  async testBlockchainWrite(): Promise<boolean> {
+    try {
+      if (!this.serviceWallet) {
+        console.error('[TEST] No service wallet available');
+        return false;
+      }
+
+      console.log('[TEST] Testing basic blockchain write capability...');
+      console.log(`[TEST] Service wallet: ${this.serviceWallet.address}`);
+      
+      // Get current balance
+      const balance = await this.serviceWallet.getBalance();
+      console.log(`[TEST] Service wallet balance: ${ethers.utils.formatEther(balance)} POL`);
+      
+      if (balance.lt(ethers.utils.parseEther('0.01'))) {
+        console.error('[TEST] Insufficient balance for write test');
+        return false;
+      }
+
+      // Test with a simple transaction (send 0.001 POL to self)
+      console.log('[TEST] Attempting simple transaction...');
+      const tx = await this.serviceWallet.sendTransaction({
+        to: this.serviceWallet.address,
+        value: ethers.utils.parseEther('0.001'),
+        gasLimit: 21000
+      });
+      
+      console.log(`[TEST] Transaction submitted: ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(`[TEST] Transaction confirmed in block ${receipt.blockNumber}`);
+      
+      console.log('[TEST] SUCCESS: Blockchain write capability confirmed');
+      return true;
+    } catch (error) {
+      console.error('[TEST] ERROR: Blockchain write test failed:', error);
       return false;
     }
   }

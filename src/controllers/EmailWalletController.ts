@@ -103,4 +103,34 @@ export class EmailWalletController extends Controller {
       this.sendError(res, 'Failed to get credit balance', 500);
     }
   }
+
+  // Test blockchain write capability
+  public async testBlockchainWrite(req: Request, res: Response): Promise<void> {
+    try {
+      const domain = this.getDomainFromRequest(req);
+      const config = this.getConfigFromRequest(req);
+      
+      console.log(`[TEST] Starting blockchain write test for domain: ${domain}`);
+      
+      // Initialize blockchain service
+      const blockchainService = new BlockchainService(config);
+      
+      // Test basic write capability
+      const success = await (blockchainService as any).testBlockchainWrite();
+      
+      const result = {
+        domain,
+        blockchainWriteTest: success,
+        timestamp: new Date().toISOString(),
+        message: success ? 'Blockchain write capability confirmed' : 'Blockchain write test failed'
+      };
+      
+      console.log(`[TEST] Blockchain write test result: ${success}`);
+      this.sendResponse(res, result);
+      
+    } catch (error) {
+      console.error('[TEST] Blockchain write test error:', error);
+      this.sendError(res, 'Blockchain write test failed', 500);
+    }
+  }
 }
