@@ -2,6 +2,9 @@ import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 import { Config } from '../config/Config';
 import { BlockchainService } from './BlockchainService';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 interface EmailData {
   id: string;
@@ -35,8 +38,7 @@ export class GraphEmailMonitorService {
   private lastProcessedTime: Date;
 
   constructor(domain: string = 'localhost') {
-    // For now, use a mock config until we fix the Config loading
-    this.config = this.getMockConfig();
+    this.config = this.loadEpisteryConfig(domain);
     this.lastProcessedTime = new Date(Date.now() - 60000); // Start 1 minute ago
     
     try {
@@ -47,14 +49,99 @@ export class GraphEmailMonitorService {
     }
   }
 
-  private getMockConfig(): any {
+  private loadEpisteryConfig(domain: string): any {
+    try {
+      // Load EPISTERY configuration from ~/.data-wallet/domain/config.ini
+      const configDir = path.join(os.homedir(), '.data-wallet', domain);
+      const configFile = path.join(configDir, 'config.ini');
+      
+      console.log(`📁 Loading EPISTERY config from: ${configFile}`);
+      
+      if (!fs.existsSync(configFile)) {
+        console.warn(`⚠️ Configuration file not found: ${configFile}`);
+        return this.getDefaultConfig();
+      }
+
+      const configContent = fs.readFileSync(configFile, 'utf8');
+      const config = this.parseIniConfig(configContent);
+      
+      console.log(`📧 Email config loaded - enabled: ${config.email?.microsoftGraph?.enabled}`);
+      return config;
+    } catch (error) {
+      console.error('❌ Failed to load EPISTERY config:', error);
+      return this.getDefaultConfig();
+    }
+  }
+
+  private parseIniConfig(content: string): any {
+    const config: any = {};
+    let currentSection = '';
+    let currentSubsection = '';
+
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) {
+        continue;
+      }
+
+      // Handle sections like [email] or [email.microsoftGraph]
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        const sectionName = trimmed.slice(1, -1);
+        
+        if (sectionName.includes('.')) {
+          const parts = sectionName.split('.');
+          currentSection = parts[0];
+          currentSubsection = parts[1];
+          
+          if (!config[currentSection]) {
+            config[currentSection] = {};
+          }
+          if (!config[currentSection][currentSubsection]) {
+            config[currentSection][currentSubsection] = {};
+          }
+        } else {
+          currentSection = sectionName;
+          currentSubsection = '';
+          if (!config[currentSection]) {
+            config[currentSection] = {};
+          }
+        }
+        continue;
+      }
+
+      // Handle key=value pairs
+      const equalIndex = trimmed.indexOf('=');
+      if (equalIndex > 0) {
+        const key = trimmed.substring(0, equalIndex).trim();
+        let value: any = trimmed.substring(equalIndex + 1).trim();
+
+        // Convert boolean strings
+        if (value.toLowerCase() === 'true') value = true;
+        else if (value.toLowerCase() === 'false') value = false;
+        // Convert numbers
+        else if (!isNaN(Number(value)) && value !== '') value = Number(value);
+
+        if (currentSection && currentSubsection) {
+          config[currentSection][currentSubsection][key] = value;
+        } else if (currentSection) {
+          config[currentSection][key] = value;
+        }
+      }
+    }
+
+    return config;
+  }
+
+  private getDefaultConfig(): any {
     return {
       email: {
         microsoftGraph: {
-          enabled: false, // Disabled until properly configured
-          tenantId: 'mock-tenant-id',
-          clientId: 'mock-client-id',
-          clientSecret: 'mock-client-secret',
+          enabled: false,
+          tenantId: '',
+          clientId: '',
+          clientSecret: '',
           userPrincipalName: 'process@rivetz.com',
           pollIntervalMinutes: 1
         }
@@ -78,6 +165,8 @@ export class GraphEmailMonitorService {
     }
 
     try {
+      console.log(`📧 Attempting to connect with tenant: ${this.config.email.microsoftGraph.tenantId}`);
+      
       const clientSecretCredential = new ClientSecretCredential(
         this.config.email.microsoftGraph.tenantId,
         this.config.email.microsoftGraph.clientId,
@@ -87,13 +176,19 @@ export class GraphEmailMonitorService {
       this.graphClient = Client.initWithMiddleware({
         authProvider: {
           getAccessToken: async () => {
-            const token = await clientSecretCredential.getToken('https://graph.microsoft.com/.default');
-            return token?.token || '';
+            try {
+              const token = await clientSecretCredential.getToken('https://graph.microsoft.com/.default');
+              console.log('🔑 Graph API token acquired successfully');
+              return token?.token || '';
+            } catch (error) {
+              console.error('❌ Failed to get Graph API token:', error);
+              throw error;
+            }
           }
         }
       });
 
-      console.log('✅ Microsoft Graph client initialized');
+      console.log('✅ Microsoft Graph client initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize Graph client:', error);
       this.graphClient = null;
@@ -154,6 +249,8 @@ export class GraphEmailMonitorService {
       console.log('🔍 Testing Microsoft Graph connection...');
       
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
+      console.log(`📧 Testing connection for user: ${userPrincipalName}`);
+      
       const user = await this.graphClient.api(`/users/${userPrincipalName}`).get();
       
       console.log(`✅ Connected to Microsoft Graph for user: ${user.displayName} (${user.mail})`);
