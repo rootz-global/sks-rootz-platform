@@ -136,13 +136,11 @@ export class IntegratedEmailMonitoringService {
       
       // Get unread emails
       const messages = await this.graphClient
-        .users(userPrincipalName)
-        .messages
-        .get({
-          $filter: `isRead eq false and receivedDateTime gt ${this.lastProcessedTime.toISOString()}`,
-          $orderby: 'receivedDateTime desc',
-          $top: 10
-        });
+        .api(`/users/${userPrincipalName}/messages`)
+        .filter(`isRead eq false and receivedDateTime gt ${this.lastProcessedTime.toISOString()}`)
+        .orderby('receivedDateTime desc')
+        .top(10)
+        .get();
 
       if (messages && messages.value && messages.value.length > 0) {
         console.log(`📨 Found ${messages.value.length} new email(s) to process`);
@@ -266,8 +264,7 @@ ${body}`;
       const userPrincipalName = this.config.get('email.microsoftGraph.userPrincipalName');
       
       await this.graphClient
-        .users(userPrincipalName)
-        .messages(messageId)
+        .api(`/users/${userPrincipalName}/messages/${messageId}`)
         .patch({
           isRead: true
         });
@@ -319,7 +316,7 @@ ${body}`;
       
       // Test Graph API connection
       await this.graphClient
-        .users(userPrincipalName)
+        .api(`/users/${userPrincipalName}`)
         .get();
 
       return {

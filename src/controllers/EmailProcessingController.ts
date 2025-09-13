@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Config } from '../core/configuration';
 import AuthorizationService from '../services/authorization/AuthorizationService';
-import LocalIPFSService from '../services/ipfs/LocalIPFSService';
+import LocalIPFSService from '../services/ipfs/PinataIPFSService';
 import EmailParser from '../services/email-processing/EmailParser';
 
 /**
