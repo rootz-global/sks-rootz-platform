@@ -35,7 +35,7 @@ export class IntegratedEmailMonitoringService {
         const graphClient = require('@microsoft/microsoft-graph-client');
         GraphServiceClient = graphClient.GraphServiceClient;
       } catch (error) {
-        console.error('❌ Microsoft Graph packages not installed:', error.message);
+        console.error('❌ Microsoft Graph packages not installed:', error instanceof Error ? error.message : String(error));
         console.log('💡 Run: npm install @azure/msal-node @microsoft/microsoft-graph-client');
         return false;
       }
