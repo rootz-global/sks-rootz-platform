@@ -64,7 +64,8 @@ export class AuthorizationService {
       // Initialize contract (minimal ABI for basic functionality)
       const authABI = [
         "function createAuthorizationRequest(address userWallet, string authToken, bytes32 emailHash, bytes32[] attachmentHashes) external returns (bytes32 requestId)",
-        "function getAuthorizationRequest(bytes32 requestId) external view returns (address userWallet, string authToken, bytes32 emailHash, uint256 attachmentCount, uint256 creditCost, uint256 createdAt, uint256 expiresAt, uint8 status)"
+        "function getAuthorizationRequest(bytes32 requestId) external view returns (address userWallet, string authToken, bytes32 emailHash, uint256 attachmentCount, uint256 creditCost, uint256 createdAt, uint256 expiresAt, uint8 status)",
+        "function processAuthorizedRequest(bytes32 requestId, tuple(string forwardedBy, string originalSender, string messageId, string subject, bytes32 bodyHash, bytes32 emailHash, bytes32 emailHeadersHash, uint256 attachmentCount, string ipfsHash, tuple(bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) authResults) emailData, tuple(string originalFilename, string filename, string mimeType, string fileExtension, uint256 fileSize, bytes32 contentHash, string fileSignature, string ipfsHash, uint256 attachmentIndex, string emailSender, string emailSubject, uint256 emailTimestamp)[] attachmentData) external returns (tuple(bool success, bytes32 emailWalletId, bytes32[] attachmentWalletIds, uint256 totalCreditsUsed, string errorMessage))"
       ];
       
       this.authContract = new ethers.Contract(contractAddress, authABI, this.serviceWallet);
@@ -175,6 +176,86 @@ export class AuthorizationService {
     } catch (error) {
       console.error('Failed to get authorization request:', error);
       return null;
+    }
+  }
+  
+  /**
+   * Process authorized request and create wallets
+   */
+  async processAuthorizedRequest(
+    requestId: string,
+    emailData: ParsedEmailData,
+    ipfsHash: string
+  ): Promise<ProcessingResult> {
+    
+    try {
+      console.log('🔄 Processing authorized request...');
+      console.log(`   Request ID: ${requestId}`);
+      
+      const requestBytes = requestId; // Use requestId directly (already bytes32)
+      
+      // Prepare email data for contract
+      const contractEmailData = {
+        forwardedBy: 'rootz.global',
+        originalSender: emailData.from,
+        messageId: emailData.messageId,
+        subject: emailData.subject,
+        bodyHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.bodyHash)),
+        emailHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHash)),
+        emailHeadersHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHeadersHash)),
+        attachmentCount: emailData.attachments.length,
+        ipfsHash: ipfsHash,
+        authResults: {
+          spfPass: emailData.authentication.spfPass,
+          dkimValid: emailData.authentication.dkimValid,
+          dmarcPass: emailData.authentication.dmarcPass,
+          dkimSignature: emailData.authentication.dkimSignature || ''
+        }
+      };
+      
+      // Prepare attachment data for contract
+      const contractAttachmentData = emailData.attachments.map((att, index) => ({
+        originalFilename: att.filename,
+        filename: att.filename,
+        mimeType: att.contentType,
+        fileExtension: this.getFileExtension(att.filename),
+        fileSize: att.size,
+        contentHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(att.contentHash)),
+        fileSignature: '', // Could be computed if needed
+        ipfsHash: '', // Would be set if attachment uploaded separately
+        attachmentIndex: index,
+        emailSender: emailData.from,
+        emailSubject: emailData.subject,
+        emailTimestamp: Math.floor(emailData.date.getTime() / 1000)
+      }));
+      
+      console.log('📤 Calling processAuthorizedRequest...');
+      
+      // Call contract to process the request
+      const tx = await this.authContract.processAuthorizedRequest(
+        requestBytes,
+        contractEmailData,
+        contractAttachmentData,
+        {
+          gasLimit: 1000000, // Higher limit for wallet creation
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+        }
+      );
+      
+      console.log(`⏳ Processing transaction: ${tx.hash}`);
+      
+      const receipt = await tx.wait();
+      console.log(`✅ Processing completed in block ${receipt.blockNumber}`);
+      
+      // For now, just return success - wallet creation details would need event parsing
+      return { success: true };
+      
+    } catch (error: any) {
+      console.error('❌ Failed to process authorized request:', error);
+      return {
+        success: false,
+        error: error?.message || 'Processing failed'
+      };
     }
   }
   
