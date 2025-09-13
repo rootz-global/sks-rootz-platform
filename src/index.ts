@@ -17,10 +17,9 @@ async function main() {
     // Attach platform to app (non-invasive)
     await rootz.attach(app);
     
-    // Read port from EPISTERY INI configuration
+    // Read port from INI configuration using dot notation
     const config = rootz.getConfig();
-    const domainConfig = config.loadDomain('localhost');
-    const port = domainConfig?.platform?.port || process.env.PORT || 3000;
+    const port = parseInt(config.get('platform.port') || '8000', 10);
     
     app.listen(port, () => {
       console.log(`✅ SKS Rootz Platform listening on port ${port}`);
