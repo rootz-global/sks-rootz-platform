@@ -45,16 +45,16 @@ export class AuthorizationService {
    */
   private initializeBlockchain(): void {
     try {
-      const rpcUrl = this.config.get('RPC_URL', 'https://rpc-amoy.polygon.technology/');
-      const privateKey = this.config.get('SERVICE_WALLET_PRIVATE_KEY');
-      const contractAddress = this.config.get('CONTRACT_AUTHORIZATION');
+      const rpcUrl = this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
+      const privateKey = this.config.get('blockchain.serviceWalletPrivateKey');
+      const contractAddress = this.config.get('blockchain.contractAuthorization');
       
       if (!privateKey) {
-        throw new Error('SERVICE_WALLET_PRIVATE_KEY not configured');
+        throw new Error('blockchain.serviceWalletPrivateKey not configured in INI file');
       }
       
       if (!contractAddress) {
-        throw new Error('CONTRACT_AUTHORIZATION not configured');
+        throw new Error('blockchain.contractAuthorization not configured in INI file');
       }
       
       // Initialize provider and wallet (ethers v5 syntax)
