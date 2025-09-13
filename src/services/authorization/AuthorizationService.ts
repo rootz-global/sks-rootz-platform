@@ -61,11 +61,10 @@ export class AuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // Initialize contract (simplified ABI for now)
+      // Initialize contract (minimal ABI for basic functionality)
       const authABI = [
         "function createAuthorizationRequest(address userWallet, string authToken, bytes32 emailHash, bytes32[] attachmentHashes) external returns (bytes32 requestId)",
-        "function getAuthorizationRequest(bytes32 requestId) external view returns (address userWallet, string authToken, bytes32 emailHash, uint256 attachmentCount, uint256 creditCost, uint256 createdAt, uint256 expiresAt, uint8 status)",
-        "function processAuthorizedRequest(bytes32 requestId, tuple(string forwardedBy, string originalSender, string messageId, string subject, bytes32 bodyHash, bytes32 emailHash, bytes32 emailHeadersHash, uint256 attachmentCount, string ipfsHash, tuple(bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) authResults) emailData, tuple(string originalFilename, string filename, string mimeType, string fileExtension, uint256 fileSize, bytes32 contentHash, string fileSignature, string ipfsHash, uint256 attachmentIndex, string emailSender, string emailSubject, uint256 emailTimestamp)[] attachmentData) external returns (tuple(bool success, bytes32 emailWalletId, bytes32[] attachmentWalletIds, uint256 totalCreditsUsed, string errorMessage))"
+        "function getAuthorizationRequest(bytes32 requestId) external view returns (address userWallet, string authToken, bytes32 emailHash, uint256 attachmentCount, uint256 creditCost, uint256 createdAt, uint256 expiresAt, uint8 status)"
       ];
       
       this.authContract = new ethers.Contract(contractAddress, authABI, this.serviceWallet);
@@ -127,7 +126,7 @@ export class AuthorizationService {
       const receipt = await tx.wait();
       console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
       
-      // Extract request ID from logs
+      // Extract request ID from logs (raw log parsing)
       const requestId = await this.extractRequestIdFromReceipt(receipt);
       
       if (!requestId) {
@@ -158,7 +157,7 @@ export class AuthorizationService {
    */
   async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
     try {
-      const requestBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(requestId));
+      const requestBytes = requestId; // Use requestId directly (already bytes32)
       const result = await this.authContract.getAuthorizationRequest(requestBytes);
       
       return {
@@ -180,88 +179,6 @@ export class AuthorizationService {
   }
   
   /**
-   * Process authorized request and create wallets
-   */
-  async processAuthorizedRequest(
-    requestId: string,
-    emailData: ParsedEmailData,
-    ipfsHash: string
-  ): Promise<ProcessingResult> {
-    
-    try {
-      console.log('🔄 Processing authorized request...');
-      console.log(`   Request ID: ${requestId}`);
-      
-      const requestBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(requestId));
-      
-      // Prepare email data for contract
-      const contractEmailData = {
-        forwardedBy: 'rootz.global',
-        originalSender: emailData.from,
-        messageId: emailData.messageId,
-        subject: emailData.subject,
-        bodyHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.bodyHash)),
-        emailHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHash)),
-        emailHeadersHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHeadersHash)),
-        attachmentCount: emailData.attachments.length,
-        ipfsHash: ipfsHash,
-        authResults: {
-          spfPass: emailData.authentication.spfPass,
-          dkimValid: emailData.authentication.dkimValid,
-          dmarcPass: emailData.authentication.dmarcPass,
-          dkimSignature: emailData.authentication.dkimSignature || ''
-        }
-      };
-      
-      // Prepare attachment data for contract
-      const contractAttachmentData = emailData.attachments.map((att, index) => ({
-        originalFilename: att.filename,
-        filename: att.filename,
-        mimeType: att.contentType,
-        fileExtension: this.getFileExtension(att.filename),
-        fileSize: att.size,
-        contentHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(att.contentHash)),
-        fileSignature: '', // Could be computed if needed
-        ipfsHash: '', // Would be set if attachment uploaded separately
-        attachmentIndex: index,
-        emailSender: emailData.from,
-        emailSubject: emailData.subject,
-        emailTimestamp: Math.floor(emailData.date.getTime() / 1000)
-      }));
-      
-      console.log('📤 Calling processAuthorizedRequest...');
-      
-      // Call contract to process the request
-      const tx = await this.authContract.processAuthorizedRequest(
-        requestBytes,
-        contractEmailData,
-        contractAttachmentData,
-        {
-          gasLimit: 1000000, // Higher limit for wallet creation
-          gasPrice: ethers.utils.parseUnits('30', 'gwei')
-        }
-      );
-      
-      console.log(`⏳ Processing transaction: ${tx.hash}`);
-      
-      const receipt = await tx.wait();
-      console.log(`✅ Processing completed in block ${receipt.blockNumber}`);
-      
-      // Extract result from transaction logs or return data
-      const result = await this.extractProcessingResult(receipt);
-      
-      return result;
-      
-    } catch (error: any) {
-      console.error('❌ Failed to process authorized request:', error);
-      return {
-        success: false,
-        error: error?.message || 'Processing failed'
-      };
-    }
-  }
-  
-  /**
    * Generate unique auth token
    */
   private generateAuthToken(userAddress: string, emailData: ParsedEmailData): string {
@@ -271,57 +188,33 @@ export class AuthorizationService {
   }
   
   /**
-   * Extract request ID from transaction receipt
+   * Extract request ID from transaction receipt using raw log parsing
    */
   private async extractRequestIdFromReceipt(receipt: ethers.providers.TransactionReceipt): Promise<string | null> {
     try {
-      // Look for AuthorizationRequestCreated event
+      console.log('🔍 Parsing transaction logs for request ID...');
+      console.log(`   Total logs: ${receipt.logs.length}`);
+      
+      // Look for logs from our contract
       for (const log of receipt.logs) {
-        try {
-          const parsedLog = this.authContract.interface.parseLog(log);
-          if (parsedLog && parsedLog.name === 'AuthorizationRequestCreated') {
-            return parsedLog.args.requestId;
+        if (log.address.toLowerCase() === this.authContract.address.toLowerCase()) {
+          console.log(`   Found contract log with ${log.topics.length} topics`);
+          
+          // The request ID should be in topic[1] based on the transaction analysis
+          if (log.topics.length >= 2) {
+            const requestId = log.topics[1]; // Request ID is in topic[1]
+            console.log(`   Extracted Request ID: ${requestId}`);
+            return requestId;
           }
-        } catch {
-          // Skip logs that don't match our interface
-          continue;
         }
       }
+      
+      console.log('❌ No matching contract logs found');
       return null;
+      
     } catch (error) {
       console.error('Failed to extract request ID:', error);
       return null;
-    }
-  }
-  
-  /**
-   * Extract processing result from transaction receipt
-   */
-  private async extractProcessingResult(receipt: ethers.providers.TransactionReceipt): Promise<ProcessingResult> {
-    try {
-      // Look for EmailWalletProcessed event
-      for (const log of receipt.logs) {
-        try {
-          const parsedLog = this.authContract.interface.parseLog(log);
-          if (parsedLog && parsedLog.name === 'EmailWalletProcessed') {
-            return {
-              success: true,
-              emailWalletId: parsedLog.args.emailWalletId,
-              attachmentWalletIds: parsedLog.args.attachmentWalletIds,
-              totalCreditsUsed: Number(parsedLog.args.totalCreditsUsed)
-            };
-          }
-        } catch {
-          continue;
-        }
-      }
-      
-      // If no event found, assume success but no details
-      return { success: true };
-      
-    } catch (error) {
-      console.error('Failed to extract processing result:', error);
-      return { success: false, error: 'Failed to extract result' };
     }
   }
   
