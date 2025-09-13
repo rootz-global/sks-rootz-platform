@@ -120,8 +120,10 @@ export class GraphEmailMonitorService {
         // Convert boolean strings
         if (value.toLowerCase() === 'true') value = true;
         else if (value.toLowerCase() === 'false') value = false;
-        // Convert numbers
-        else if (!isNaN(Number(value)) && value !== '') value = Number(value);
+        // Convert numbers (but exclude hex addresses and private keys)
+        else if (!isNaN(Number(value)) && value !== '' && !value.startsWith('0x') && value.length < 40) {
+          value = Number(value);
+        }
 
         if (currentSection && currentSubsection) {
           config[currentSection][currentSubsection][key] = value;
@@ -149,9 +151,7 @@ export class GraphEmailMonitorService {
       blockchain: {
         rpcUrl: 'https://rpc-amoy.polygon.technology/',
         serviceWalletPrivateKey: process.env.SERVICE_WALLET_PRIVATE_KEY || '',
-        contracts: {
-          registration: '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F'
-        }
+        contractRegistration: '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F'
       }
     };
   }
