@@ -111,6 +111,7 @@ export class EmailProcessingController {
       console.log(`✅ Authorization request created: ${authResult.requestId}`);
 
       // Step 4: Generate email summary
+      const attachmentCount = parsedEmail.attachments?.length || 0;
       const emailSummary = `📧 Email Summary:
   From: ${emailPackage.emailData.from}
   To: ${Array.isArray(emailPackage.emailData.to) ? emailPackage.emailData.to.join(', ') : emailPackage.emailData.to}

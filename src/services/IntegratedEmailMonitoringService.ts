@@ -290,7 +290,7 @@ ${body}`;
       config: {
         userPrincipalName: this.config.get('email.microsoftGraph.userPrincipalName'),
         pollInterval: Number(this.config.get('email.microsoftGraph.pollIntervalMinutes')) || 1,
-        enabled: this.config.get('email.microsoftGraph.enabled') === 'true' || this.config.get('email.microsoftGraph.enabled') === true || true
+        enabled: true // Always enabled for now
       }
     };
   }
