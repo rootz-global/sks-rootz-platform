@@ -1,233 +1,246 @@
 import { Request, Response } from 'express';
-import EmailParser, { ParsedEmailData } from '../services/email-processing/EmailParser';
-import LocalIPFSService from '../services/ipfs/LocalIPFSService';
-import AuthorizationService from '../services/authorization/AuthorizationService';
 import { Config } from '../core/configuration';
+import AuthorizationService from '../services/authorization/AuthorizationService';
+import LocalIPFSService from '../services/ipfs/LocalIPFSService';
+import EmailParser from '../services/email-processing/EmailParser';
 
-export interface EmailProcessingRequest {
-  userAddress: string;
-  rawEmail: string;
-  notifyUser?: boolean;
-}
-
-export interface EmailProcessingResult {
-  success: boolean;
-  requestId?: string;
-  authToken?: string;
-  ipfsHash?: string;
-  emailSummary?: string;
-  authorizationUrl?: string;
-  error?: string;
-}
-
+/**
+ * Email Processing Controller - Proper Architecture
+ * Handles email → IPFS → blockchain authorization request flow
+ */
 export class EmailProcessingController {
-  private emailParser: EmailParser;
-  private ipfsService: LocalIPFSService;
-  private authService: AuthorizationService;
   private config: Config;
-  
+  private authService: AuthorizationService;
+  private ipfsService: LocalIPFSService;
+  private emailParser: EmailParser;
+
   constructor(config: Config) {
     this.config = config;
-    this.emailParser = new EmailParser();
-    this.ipfsService = new LocalIPFSService(config);
     this.authService = new AuthorizationService(config);
+    this.ipfsService = new LocalIPFSService(config);
+    this.emailParser = new EmailParser();
     
-    // Initialize services
-    this.initializeServices();
+    console.log('🚀 Initializing Email Processing Controller...');
   }
-  
+
   /**
-   * Initialize all required services
-   */
-  private async initializeServices(): Promise<void> {
-    try {
-      console.log('🚀 Initializing Email Processing Controller...');
-      
-      // Initialize IPFS service
-      await this.ipfsService.initialize();
-      console.log('✅ IPFS service ready');
-      
-      console.log('✅ Email Processing Controller ready');
-      
-    } catch (error: any) {
-      console.error('❌ Failed to initialize email processing controller:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Process email and create authorization request
+   * Process raw email into blockchain authorization request
    * POST /.rootz/email-processing/process
    */
   async processEmail(req: Request, res: Response): Promise<void> {
     try {
-      console.log('\n📧 Processing email for wallet creation...');
-      
-      const { userAddress, rawEmail, notifyUser = true }: EmailProcessingRequest = req.body;
+      const { userAddress, rawEmail, notifyUser = true } = req.body;
       
       if (!userAddress || !rawEmail) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: userAddress, rawEmail'
+          error: 'userAddress and rawEmail are required'
         });
         return;
       }
+
+      console.log(`📧 Processing email for user: ${userAddress}`);
+
+      // Step 1: Parse email
+      console.log(`📝 Step 1: Parsing email content...`);
+      const parsedEmail = this.emailParser.parseEmail(rawEmail);
       
-      console.log(`👤 User: ${userAddress}`);
-      console.log(`📄 Email size: ${rawEmail.length} characters`);
+      // Step 2: Upload to IPFS
+      console.log(`📤 Step 2: Uploading to IPFS...`);
+      const emailPackage = {
+        emailData: {
+          messageId: parsedEmail.messageId || `generated.${Date.now()}.${Math.random().toString(36)}@rootz.global`,
+          subject: parsedEmail.subject || 'No Subject',
+          from: parsedEmail.from || 'unknown@example.com',
+          to: parsedEmail.to || ['user@rootz.global'],
+          date: parsedEmail.date || new Date().toISOString(),
+          bodyText: parsedEmail.bodyText || '',
+          bodyHtml: parsedEmail.bodyHtml || '',
+          headers: parsedEmail.headers || {},
+          authentication: {
+            spfPass: false,
+            dkimValid: false,
+            dmarcPass: false,
+            receivedChain: []
+          },
+          hashes: {
+            bodyHash: this.emailParser.createHash(parsedEmail.bodyText || ''),
+            emailHash: this.emailParser.createHash(JSON.stringify(parsedEmail)),
+            emailHeadersHash: this.emailParser.createHash(JSON.stringify(parsedEmail.headers || {}))
+          }
+        },
+        attachments: [], // TODO: Process attachments
+        metadata: {
+          createdAt: new Date().toISOString(),
+          platform: 'SKS Rootz Platform',
+          version: '1.0.0',
+          totalSize: rawEmail.length
+        }
+      };
+
+      const ipfsResult = await this.ipfsService.uploadEmailPackage(emailPackage);
       
-      const result = await this.processEmailInternal(userAddress, rawEmail, notifyUser);
-      
-      if (result.success) {
-        res.json(result);
-      } else {
-        res.status(500).json(result);
+      if (!ipfsResult.success) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to upload to IPFS: ' + ipfsResult.error
+        });
+        return;
       }
+
+      console.log(`✅ IPFS upload successful: ${ipfsResult.hash}`);
+
+      // Step 3: Create blockchain authorization request
+      console.log(`⛓️ Step 3: Creating blockchain authorization request...`);
+      const authToken = `0x${Math.random().toString(16).substring(2, 18)}`;
+      const attachmentCount = 0; // TODO: Count actual attachments
       
+      const authResult = await this.authService.createAuthorizationRequest(
+        userAddress,
+        authToken,
+        emailPackage.emailData.hashes.emailHash,
+        attachmentCount
+      );
+
+      if (!authResult.success) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create authorization request: ' + authResult.error
+        });
+        return;
+      }
+
+      console.log(`✅ Authorization request created: ${authResult.requestId}`);
+
+      // Step 4: Generate email summary
+      const emailSummary = `📧 Email Summary:
+  From: ${emailPackage.emailData.from}
+  To: ${Array.isArray(emailPackage.emailData.to) ? emailPackage.emailData.to.join(', ') : emailPackage.emailData.to}
+  Subject: ${emailPackage.emailData.subject}
+  Date: ${emailPackage.emailData.date}
+  Body Length: ${(emailPackage.emailData.bodyText || '').length} chars
+  Attachments: ${attachmentCount}
+  Auth: SPF=${emailPackage.emailData.authentication.spfPass} DKIM=${emailPackage.emailData.authentication.dkimValid} DMARC=${emailPackage.emailData.authentication.dmarcPass}
+  Email Hash: ${emailPackage.emailData.hashes.emailHash.replace('0x', '')}
+  Body Hash: ${emailPackage.emailData.hashes.bodyHash.replace('0x', '')}`;
+
+      // Step 5: Create authorization URL for existing web interface
+      const authorizationUrl = `http://rootz.global/static/services/email-data-wallet/authorization.html?token=${authToken}&request=${authResult.requestId}`;
+
+      res.json({
+        success: true,
+        requestId: authResult.requestId,
+        authToken,
+        ipfsHash: ipfsResult.hash,
+        emailSummary,
+        authorizationUrl
+      });
+
     } catch (error: any) {
-      console.error('❌ Email processing error:', error);
+      console.error('❌ Email processing failed:', error);
       res.status(500).json({
         success: false,
         error: error?.message || 'Email processing failed'
       });
     }
   }
-  
+
   /**
-   * Internal email processing workflow
+   * Get authorization requests for a user (for UI)
+   * GET /.rootz/email-processing/authorization-requests/:userAddress
    */
-  async processEmailInternal(
-    userAddress: string,
-    rawEmail: string,
-    notifyUser: boolean
-  ): Promise<EmailProcessingResult> {
-    
+  async getAuthorizationRequests(req: Request, res: Response): Promise<void> {
     try {
-      // Step 1: Parse email
-      console.log('📝 Step 1: Parsing email content...');
-      const emailData = await this.emailParser.parseEmail(rawEmail);
+      const { userAddress } = req.params;
       
-      // Validate parsed data
-      const validation = this.emailParser.validateEmailData(emailData);
-      if (!validation.valid) {
-        throw new Error(`Email validation failed: ${validation.errors.join(', ')}`);
-      }
-      
-      console.log('✅ Email parsed successfully');
-      console.log(this.emailParser.createEmailSummary(emailData));
-      
-      // Step 2: Upload to IPFS
-      console.log('\n💾 Step 2: Uploading to local IPFS...');
-      const ipfsResult = await this.ipfsService.uploadEmailPackage(emailData, emailData.attachments);
-      
-      if (!ipfsResult.success) {
-        throw new Error(`IPFS upload failed: ${ipfsResult.error}`);
-      }
-      
-      console.log(`✅ Email uploaded to IPFS: ${ipfsResult.ipfsHash}`);
-      
-      // Step 3: Create authorization request
-      console.log('\n🔐 Step 3: Creating authorization request...');
-      const authResult = await this.authService.createAuthorizationRequest(
-        userAddress,
-        emailData,
-        ipfsResult.ipfsHash!
-      );
-      
-      if (!authResult.success) {
-        throw new Error(`Authorization request failed: ${authResult.error}`);
-      }
-      
-      console.log(`✅ Authorization request created: ${authResult.requestId}`);
-      
-      // Step 4: Generate authorization URL
-      const authUrl = this.generateAuthorizationUrl(authResult.authToken!, authResult.requestId!);
-      
-      // Step 5: Send notification (if requested)
-      if (notifyUser) {
-        await this.sendUserNotification(userAddress, emailData, authUrl);
-      }
-      
-      console.log('\n🎉 Email processing completed successfully!');
-      console.log(`📝 Summary:`);
-      console.log(`   Email: ${emailData.subject} from ${emailData.from}`);
-      console.log(`   IPFS: ${ipfsResult.ipfsHash}`);
-      console.log(`   Request: ${authResult.requestId}`);
-      console.log(`   Auth URL: ${authUrl}`);
-      
-      return {
-        success: true,
-        requestId: authResult.requestId!,
-        authToken: authResult.authToken!,
-        ipfsHash: ipfsResult.ipfsHash!,
-        emailSummary: this.emailParser.createEmailSummary(emailData),
-        authorizationUrl: authUrl
-      };
-      
-    } catch (error: any) {
-      console.error('❌ Email processing workflow failed:', error);
-      return {
-        success: false,
-        error: error?.message || 'Processing workflow failed'
-      };
-    }
-  }
-  
-  /**
-   * Process user authorization (when they sign via MetaMask)
-   * POST /.rootz/email-processing/authorize/:requestId
-   */
-  async processAuthorization(req: Request, res: Response): Promise<void> {
-    try {
-      const { requestId } = req.params;
-      const { signature, userAddress } = req.body;
-      
-      console.log(`\n🔐 Processing user authorization for request: ${requestId}`);
-      console.log(`👤 User: ${userAddress}`);
-      
-      if (!signature) {
+      if (!userAddress) {
         res.status(400).json({
           success: false,
-          error: 'Missing signature'
+          error: 'User address is required'
         });
         return;
       }
-      
-      // Get original authorization request details
-      const authRequest = await this.authService.getAuthorizationRequest(requestId);
-      if (!authRequest) {
-        res.status(404).json({
-          success: false,
-          error: 'Authorization request not found'
-        });
-        return;
-      }
-      
-      // Note: The actual signature verification and wallet creation 
-      // happens on the blockchain when the user calls the contract directly
-      // This endpoint is for our backend to know about the authorization
-      
-      console.log('✅ Authorization processed - user will sign transaction on blockchain');
+
+      console.log(`📋 Getting authorization requests for user: ${userAddress}`);
+
+      // Get all pending authorization requests for this user
+      const requests = await this.authService.getUserAuthorizationRequests(userAddress);
       
       res.json({
         success: true,
-        message: 'Authorization received - please complete transaction on blockchain',
-        requestId,
-        contractAddress: this.config.get('CONTRACT_AUTHORIZATION'),
-        userAddress: authRequest.userAddress
+        requests
       });
-      
+
     } catch (error: any) {
-      console.error('❌ Authorization processing error:', error);
+      console.error('Failed to get authorization requests:', error);
       res.status(500).json({
         success: false,
-        error: error?.message || 'Authorization processing failed'
+        error: error?.message || 'Failed to get authorization requests'
       });
     }
   }
-  
+
   /**
-   * Complete wallet creation after user authorization
+   * Process user authorization signature
+   * POST /.rootz/email-processing/authorize
+   */
+  async processUserAuthorization(req: Request, res: Response): Promise<void> {
+    try {
+      const { requestId, signature, userAddress } = req.body;
+      
+      if (!requestId || !signature || !userAddress) {
+        res.status(400).json({
+          success: false,
+          error: 'requestId, signature, and userAddress are required'
+        });
+        return;
+      }
+
+      console.log(`🔐 Processing user authorization for request: ${requestId}`);
+
+      // Submit user's signature to blockchain via service wallet
+      const result = await this.authService.processUserAuthorization(requestId, signature, userAddress);
+
+      if (result.success) {
+        res.json({
+          success: true,
+          message: 'Authorization processed successfully',
+          transactionHash: result.transactionHash,
+          requestId
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: result.error || 'Failed to process authorization'
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Failed to process user authorization:', error);
+      res.status(500).json({
+        success: false,
+        error: error?.message || 'Failed to process authorization'
+      });
+    }
+  }
+
+  /**
+   * Legacy authorization endpoint
+   * POST /.rootz/email-processing/authorize/:requestId
+   */
+  async processAuthorization(req: Request, res: Response): Promise<void> {
+    const { requestId } = req.params;
+    const { signature, userAddress } = req.body;
+    
+    // Delegate to main authorization handler
+    await this.processUserAuthorization({
+      ...req,
+      body: { requestId, signature, userAddress }
+    } as Request, res);
+  }
+
+  /**
+   * Complete wallet creation after authorization
    * POST /.rootz/email-processing/complete/:requestId
    */
   async completeWalletCreation(req: Request, res: Response): Promise<void> {
@@ -235,77 +248,76 @@ export class EmailProcessingController {
       const { requestId } = req.params;
       const { emailData, ipfsHash } = req.body;
       
-      console.log(`\n🏁 Completing wallet creation for request: ${requestId}`);
-      
-      if (!emailData || !ipfsHash) {
+      if (!requestId) {
         res.status(400).json({
           success: false,
-          error: 'Missing emailData or ipfsHash'
+          error: 'requestId is required'
         });
         return;
       }
-      
-      // Process the authorized request on blockchain
-      const result = await this.authService.processAuthorizedRequest(
-        requestId,
-        emailData,
-        ipfsHash
-      );
-      
+
+      console.log(`📦 Completing wallet creation for request: ${requestId}`);
+
+      const result = await this.authService.completeWalletCreation(requestId, emailData, ipfsHash);
+
       if (result.success) {
-        console.log('✅ Wallet creation completed successfully');
-        console.log(`   Email Wallet ID: ${result.emailWalletId}`);
-        console.log(`   Attachment Wallets: ${result.attachmentWalletIds?.length || 0}`);
-        console.log(`   Credits Used: ${result.totalCreditsUsed}`);
-        
-        res.json(result);
+        res.json({
+          success: true,
+          message: 'DATA_WALLET created successfully',
+          transactionHash: result.transactionHash,
+          walletId: result.walletId
+        });
       } else {
-        res.status(500).json(result);
+        res.status(500).json({
+          success: false,
+          error: result.error || 'Failed to create DATA_WALLET'
+        });
       }
-      
+
     } catch (error: any) {
-      console.error('❌ Wallet creation completion error:', error);
+      console.error('Failed to complete wallet creation:', error);
       res.status(500).json({
         success: false,
-        error: error?.message || 'Wallet creation failed'
+        error: error?.message || 'Failed to complete wallet creation'
       });
     }
   }
-  
+
   /**
-   * Get email processing status
+   * Get processing status
    * GET /.rootz/email-processing/status/:requestId
    */
   async getProcessingStatus(req: Request, res: Response): Promise<void> {
     try {
       const { requestId } = req.params;
       
-      const authRequest = await this.authService.getAuthorizationRequest(requestId);
-      
-      if (!authRequest) {
-        res.status(404).json({
+      if (!requestId) {
+        res.status(400).json({
           success: false,
-          error: 'Request not found'
+          error: 'requestId is required'
         });
         return;
       }
+
+      const status = await this.authService.getRequestStatus(requestId);
       
       res.json({
         success: true,
-        request: authRequest
+        requestId,
+        status
       });
-      
+
     } catch (error: any) {
-      console.error('❌ Status check error:', error);
+      console.error('Failed to get processing status:', error);
       res.status(500).json({
         success: false,
-        error: error?.message || 'Status check failed'
+        error: error?.message || 'Failed to get processing status'
       });
     }
   }
-  
+
   /**
-   * Test email parsing without blockchain operations
+   * Test email parsing (no blockchain operations)
    * POST /.rootz/email-processing/test-parse
    */
   async testEmailParsing(req: Request, res: Response): Promise<void> {
@@ -315,48 +327,30 @@ export class EmailProcessingController {
       if (!rawEmail) {
         res.status(400).json({
           success: false,
-          error: 'Missing rawEmail'
+          error: 'rawEmail is required'
         });
         return;
       }
-      
-      console.log('🧪 Testing email parsing...');
-      
-      const emailData = await this.emailParser.parseEmail(rawEmail);
-      const validation = this.emailParser.validateEmailData(emailData);
-      const summary = this.emailParser.createEmailSummary(emailData);
+
+      const parsedEmail = this.emailParser.parseEmail(rawEmail);
       
       res.json({
         success: true,
-        emailData: {
-          messageId: emailData.messageId,
-          subject: emailData.subject,
-          from: emailData.from,
-          to: emailData.to,
-          date: emailData.date,
-          attachmentCount: emailData.attachments.length,
-          hashes: {
-            bodyHash: emailData.bodyHash,
-            emailHash: emailData.emailHash,
-            emailHeadersHash: emailData.emailHeadersHash
-          },
-          authentication: emailData.authentication
-        },
-        validation,
-        summary
+        parsedEmail,
+        message: 'Email parsing successful'
       });
-      
+
     } catch (error: any) {
-      console.error('❌ Email parsing test error:', error);
+      console.error('Email parsing test failed:', error);
       res.status(500).json({
         success: false,
-        error: error?.message || 'Email parsing test failed'
+        error: error?.message || 'Email parsing failed'
       });
     }
   }
-  
+
   /**
-   * Health check for all email processing services
+   * Health check for email processing services
    * GET /.rootz/email-processing/health
    */
   async healthCheck(req: Request, res: Response): Promise<void> {
@@ -364,55 +358,24 @@ export class EmailProcessingController {
       const ipfsHealth = await this.ipfsService.healthCheck();
       const authHealth = await this.authService.healthCheck();
       
-      const overallHealthy = ipfsHealth.healthy && authHealth.healthy;
+      const overallHealth = ipfsHealth.healthy && authHealth.healthy;
       
-      res.status(overallHealthy ? 200 : 503).json({
-        healthy: overallHealthy,
+      res.status(overallHealth ? 200 : 503).json({
+        success: overallHealth,
         services: {
           ipfs: ipfsHealth,
-          authorization: authHealth,
-          emailParser: { healthy: true, details: { initialized: true } }
-        }
+          authorization: authHealth
+        },
+        timestamp: new Date().toISOString()
       });
-      
+
     } catch (error: any) {
+      console.error('Health check failed:', error);
       res.status(503).json({
-        healthy: false,
-        error: error?.message || 'Health check failed'
+        success: false,
+        error: error?.message || 'Health check failed',
+        timestamp: new Date().toISOString()
       });
-    }
-  }
-  
-  /**
-   * Generate authorization URL for user
-   */
-  private generateAuthorizationUrl(authToken: string, requestId: string): string {
-    const baseUrl = this.config.get('BASE_URL', 'http://rootz.global');
-    return `${baseUrl}/static/services/email-data-wallet/authorization.html?token=${authToken}&request=${requestId}`;
-  }
-  
-  /**
-   * Send notification to user about authorization request
-   */
-  private async sendUserNotification(
-    userAddress: string,
-    emailData: ParsedEmailData,
-    authUrl: string
-  ): Promise<void> {
-    
-    try {
-      console.log('📧 Sending user notification...');
-      
-      // TODO: Implement notification service
-      // For now, just log the notification details
-      console.log(`📝 Notification would be sent:`);
-      console.log(`   To: ${userAddress}`);
-      console.log(`   Email: ${emailData.subject} from ${emailData.from}`);
-      console.log(`   Auth URL: ${authUrl}`);
-      
-    } catch (error) {
-      console.error('❌ Failed to send notification:', error);
-      // Don't fail the whole process if notification fails
     }
   }
 }

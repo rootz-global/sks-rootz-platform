@@ -7,6 +7,7 @@ import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 import testRoutes from './routes/testRoutes';
+import EmailMonitoringController from './controllers/EmailMonitoringController';
 
 // CORS middleware function
 function enableCORS(req: Request, res: Response, next: NextFunction): void {
@@ -110,11 +111,8 @@ export class RootzPlatform {
     router.post('/email-wallet/register', emailWalletController.register.bind(emailWalletController));
     router.get('/email-wallet/balance/:address', emailWalletController.getBalance.bind(emailWalletController));
     
-    // Email monitoring routes (NEW)
-    router.post('/email-monitoring/start', emailWalletController.startEmailMonitoring.bind(emailWalletController));
-    router.post('/email-monitoring/stop', emailWalletController.stopEmailMonitoring.bind(emailWalletController));
-    router.get('/email-monitoring/status', emailWalletController.getEmailMonitoringStatus.bind(emailWalletController));
-    router.post('/email-monitoring/test', emailWalletController.testEmailProcessing.bind(emailWalletController));
+    // Legacy email monitoring routes REMOVED - using integrated monitoring instead
+    // Old routes disabled to prevent conflicts with new integrated system
 
     // Wallet proposal routes (NEW)
     router.post('/email-wallet/propose', emailWalletController.createWalletProposal.bind(emailWalletController));
@@ -123,6 +121,17 @@ export class RootzPlatform {
     
     // Test endpoints
     router.get('/test/blockchain-write', emailWalletController.testBlockchainWrite.bind(emailWalletController));
+
+    // EMAIL MONITORING ROUTES (INTEGRATED) - Replaces old email monitoring
+    console.log('📧 Initializing Integrated Email Monitoring routes...');
+    const emailMonitoringController = new EmailMonitoringController(this.config);
+    router.post('/email-monitoring/start', emailMonitoringController.startMonitoring.bind(emailMonitoringController));
+    router.post('/email-monitoring/stop', emailMonitoringController.stopMonitoring.bind(emailMonitoringController));
+    router.get('/email-monitoring/status', emailMonitoringController.getStatus.bind(emailMonitoringController));
+    router.post('/email-monitoring/test', emailMonitoringController.testProcessing.bind(emailMonitoringController));
+    router.get('/email-monitoring/health', emailMonitoringController.healthCheck.bind(emailMonitoringController));
+    console.log('✅ Integrated Email Monitoring routes initialized');
+    console.log('   Available at: /.rootz/email-monitoring/*');
 
     // EMAIL PROCESSING ROUTES (NEW) - Complete Email-to-Blockchain System
     console.log('🔧 Initializing Email Processing routes...');
