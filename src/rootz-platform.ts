@@ -2,7 +2,7 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
-import { Config } from './config/Config';
+import { Config } from './core/configuration/Config';
 import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
@@ -44,8 +44,10 @@ export class RootzPlatform {
     
     console.log('🔧 Initializing SKS Rootz Platform...');
     
-    // Load configuration (EPISTERY pattern)
-    await this.config.initialize();
+    // Load configuration for current domain (EPISTERY pattern)
+    const domain = process.env.DOMAIN || 'localhost';
+    this.config.loadDomain(domain);
+    console.log(`✅ Loaded configuration for domain: ${domain}`);
     
     this.isInitialized = true;
     console.log('✅ Platform initialization complete');
@@ -80,8 +82,12 @@ export class RootzPlatform {
     const domain = req.hostname || 'localhost';
     
     // Load domain-specific configuration if needed
+    if (this.config.getCurrentDomain() !== domain) {
+      this.config.loadDomain(domain);
+    }
+    
     req.app.locals.domain = domain;
-    req.app.locals.config = this.config.loadDomain(domain);
+    req.app.locals.config = this.config;
     
     next();
   }
