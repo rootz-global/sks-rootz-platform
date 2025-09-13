@@ -88,7 +88,7 @@ export class IntegratedEmailMonitoringService {
     }
 
     this.isRunning = true;
-    const pollInterval = this.config.get('email.microsoftGraph.pollIntervalMinutes') as number || 1;
+    const pollInterval = Number(this.config.get('email.microsoftGraph.pollIntervalMinutes')) || 1;
     
     console.log('🚀 Starting integrated email monitoring...');
     console.log(`📧 Monitoring emails every ${pollInterval} minute(s)`);
@@ -289,8 +289,8 @@ ${body}`;
       graphClientAvailable: !!this.graphClient,
       config: {
         userPrincipalName: this.config.get('email.microsoftGraph.userPrincipalName'),
-        pollInterval: this.config.get('email.microsoftGraph.pollIntervalMinutes') as number || 1,
-        enabled: this.config.get('email.microsoftGraph.enabled') as boolean || true
+        pollInterval: Number(this.config.get('email.microsoftGraph.pollIntervalMinutes')) || 1,
+        enabled: this.config.get('email.microsoftGraph.enabled') === 'true' || this.config.get('email.microsoftGraph.enabled') === true
       }
     };
   }

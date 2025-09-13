@@ -98,7 +98,8 @@ export class EmailProcessingController {
       const authResult = await this.authService.createAuthorizationRequest(
         userAddress,
         authToken,
-        emailPackage.emailData.hashes.emailHash
+        emailPackage.emailData.hashes.emailHash,
+        attachmentCount
       );
 
       if (!authResult.success) {
