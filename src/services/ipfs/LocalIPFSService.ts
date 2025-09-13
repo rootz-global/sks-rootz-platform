@@ -1,4 +1,6 @@
 import { Config } from '../../core/configuration';
+import fetch from 'node-fetch';
+import FormData from 'form-data';
 
 export interface IPFSUploadResult {
   success: boolean;
@@ -106,9 +108,8 @@ export class LocalIPFSService {
     
     try {
       const response = await fetch(`${this.ipfsApiUrl}/id`, {
-        method: 'POST',
-        timeout: 5000
-      } as any);
+        method: 'POST'
+      });
       return response.ok;
     } catch {
       this.isConnected = false;
@@ -171,12 +172,15 @@ export class LocalIPFSService {
       
       // Use IPFS HTTP API to add content
       const formData = new FormData();
-      const blob = new Blob([packageJson], { type: 'application/json' });
-      formData.append('file', blob, 'email-package.json');
+      formData.append('file', Buffer.from(packageJson), {
+        filename: 'email-package.json',
+        contentType: 'application/json'
+      });
       
       const response = await fetch(`${this.ipfsApiUrl}/add?pin=true`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: formData.getHeaders()
       });
       
       if (!response.ok) {
@@ -200,7 +204,7 @@ export class LocalIPFSService {
         success: true,
         ipfsHash,
         ipfsUrl,
-        size: uploadResult.Size
+        size: parseInt(uploadResult.Size)
       };
       
     } catch (error: any) {
@@ -225,12 +229,15 @@ export class LocalIPFSService {
         console.log(`📎 Uploading attachment ${i + 1}: ${attachment.filename}`);
         
         const formData = new FormData();
-        const blob = new Blob([attachment.content], { type: attachment.contentType });
-        formData.append('file', blob, attachment.filename);
+        formData.append('file', attachment.content, {
+          filename: attachment.filename,
+          contentType: attachment.contentType
+        });
         
         const response = await fetch(`${this.ipfsApiUrl}/add?pin=true`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: formData.getHeaders()
         });
         
         if (!response.ok) {
@@ -358,13 +365,6 @@ export class LocalIPFSService {
   }
   
   /**
-   * Get IPFS gateway URL for content
-   */
-  private getIPFSUrl(ipfsHash: string): string {
-    return `${this.ipfsGatewayUrl}/${ipfsHash}`;
-  }
-  
-  /**
    * Calculate total size of email package
    */
   private calculateTotalSize(emailData: any, attachments: any[]): number {
@@ -406,9 +406,8 @@ export class LocalIPFSService {
       }
       
       const response = await fetch(`${this.ipfsApiUrl}/id`, {
-        method: 'POST',
-        timeout: 5000
-      } as any);
+        method: 'POST'
+      });
       
       if (!response.ok) {
         throw new Error(`Health check failed: ${response.status}`);
