@@ -6,6 +6,21 @@ import { Config } from './config/Config';
 import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
 
+// CORS middleware function
+function enableCORS(req: Request, res: Response, next: NextFunction): void {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  
+  next();
+}
+
 export class RootzPlatform {
   private static instance: RootzPlatform;
   private config: Config;
@@ -50,8 +65,8 @@ export class RootzPlatform {
     // Domain resolution middleware (EPISTERY pattern)
     app.use(this.domainResolutionMiddleware.bind(this));
     
-    // Attach platform routes under /.rootz/ (well-known path)
-    app.use('/.rootz', this.createRoutes());
+    // Attach platform routes under /.rootz/ (well-known path) with CORS
+    app.use('/.rootz', enableCORS, this.createRoutes());
     
     // Serve client library (EPISTERY pattern)
     app.use('/.rootz/lib', express.static(path.join(__dirname, 'client')));
