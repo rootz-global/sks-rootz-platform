@@ -1,42 +1,46 @@
 import { Router } from 'express';
 import EmailProcessingController from '../controllers/EmailProcessingController';
+import AuthorizationController from '../controllers/AuthorizationController';
 import { Config } from '../core/configuration';
 
 export function createEmailProcessingRoutes(config: Config): Router {
   const router = Router();
   const controller = new EmailProcessingController(config);
+  const authController = new AuthorizationController(config);
   
   /**
    * Process email and create authorization request
    * POST /.rootz/email-processing/process
-   * 
-   * Body: {
-   *   userAddress: string,
-   *   rawEmail: string,
-   *   notifyUser?: boolean
-   * }
    */
   router.post('/process', (req, res) => controller.processEmail(req, res));
   
   /**
-   * Process user authorization 
+   * Get authorization requests for user (for UI)
+   * GET /.rootz/email-processing/authorization-requests/:userAddress
+   */
+  router.get('/authorization-requests/:userAddress', (req, res) => authController.getAuthorizationRequests(req, res));
+  
+  /**
+   * Process user authorization (user signs, service submits)
+   * POST /.rootz/email-processing/authorize
+   */
+  router.post('/authorize', (req, res) => authController.processUserAuthorization(req, res));
+  
+  /**
+   * Reject authorization request
+   * POST /.rootz/email-processing/reject
+   */
+  router.post('/reject', (req, res) => authController.rejectRequest(req, res));
+  
+  /**
+   * Process user authorization (legacy endpoint)
    * POST /.rootz/email-processing/authorize/:requestId
-   * 
-   * Body: {
-   *   signature: string,
-   *   userAddress: string
-   * }
    */
   router.post('/authorize/:requestId', (req, res) => controller.processAuthorization(req, res));
   
   /**
    * Complete wallet creation after authorization
    * POST /.rootz/email-processing/complete/:requestId
-   * 
-   * Body: {
-   *   emailData: ParsedEmailData,
-   *   ipfsHash: string
-   * }
    */
   router.post('/complete/:requestId', (req, res) => controller.completeWalletCreation(req, res));
   
@@ -49,10 +53,6 @@ export function createEmailProcessingRoutes(config: Config): Router {
   /**
    * Test email parsing (no blockchain operations)
    * POST /.rootz/email-processing/test-parse
-   * 
-   * Body: {
-   *   rawEmail: string
-   * }
    */
   router.post('/test-parse', (req, res) => controller.testEmailParsing(req, res));
   

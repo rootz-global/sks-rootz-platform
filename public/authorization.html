@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email DATA_WALLET Authorization</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .wallet-status {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px solid #e5e7eb;
+        }
+        .wallet-connected {
+            background: #dcfce7;
+            border-color: #22c55e;
+            color: #15803d;
+        }
+        .wallet-disconnected {
+            background: #fef2f2;
+            border-color: #ef4444;
+            color: #dc2626;
+        }
+        .auth-request {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .email-preview {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 5px;
+        }
+        .button-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .button-primary:hover {
+            background: #1d4ed8;
+        }
+        .button-danger {
+            background: #dc2626;
+            color: white;
+        }
+        .button-danger:hover {
+            background: #b91c1c;
+        }
+        .button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status-success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        .status-error {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        .status-info {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .ipfs-link {
+            word-break: break-all;
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .ipfs-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Email DATA_WALLET Authorization</h1>
+            <p>Review and authorize creation of blockchain-verified email wallets</p>
+        </div>
+        
+        <div class="content">
+            <!-- Wallet Connection Status -->
+            <div id="walletStatus" class="wallet-status wallet-disconnected">
+                <h3>MetaMask Connection</h3>
+                <p id="walletStatusText">Connect your MetaMask wallet to authorize email wallet creation</p>
+                <button id="connectWallet" class="button button-primary">Connect MetaMask</button>
+            </div>
+
+            <!-- Authorization Requests -->
+            <div id="authRequests">
+                <h3>Pending Authorization Requests</h3>
+                <div id="requestsList">
+                    <p>Loading authorization requests...</p>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="statusMessages"></div>
+        </div>
+    </div>
+
+    <script>
+        let provider, signer, userAddress;
+        const contractAddress = '0xcC2a65A8870289B1d33bA741069cC2CEEA219573';
+
+        // Connect MetaMask
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum !== 'undefined') {
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    await provider.send("eth_requestAccounts", []);
+                    signer = provider.getSigner();
+                    userAddress = await signer.getAddress();
+                    
+                    updateWalletStatus(true);
+                    loadAuthorizationRequests();
+                } else {
+                    showStatus('MetaMask not found. Please install MetaMask extension.', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to connect wallet:', error);
+                showStatus('Failed to connect MetaMask: ' + error.message, 'error');
+            }
+        }
+
+        // Update wallet connection status
+        function updateWalletStatus(connected) {
+            const statusDiv = document.getElementById('walletStatus');
+            const statusText = document.getElementById('walletStatusText');
+            const connectButton = document.getElementById('connectWallet');
+
+            if (connected) {
+                statusDiv.className = 'wallet-status wallet-connected';
+                statusText.textContent = `Connected: ${userAddress}`;
+                connectButton.textContent = 'Connected ✓';
+                connectButton.disabled = true;
+            } else {
+                statusDiv.className = 'wallet-status wallet-disconnected';
+                statusText.textContent = 'Connect your MetaMask wallet to authorize email wallet creation';
+                connectButton.textContent = 'Connect MetaMask';
+                connectButton.disabled = false;
+            }
+        }
+
+        // Load authorization requests for connected wallet
+        async function loadAuthorizationRequests() {
+            if (!userAddress) return;
+
+            try {
+                showStatus('Loading your authorization requests...', 'info');
+                
+                // Call platform API to get user's pending requests
+                const response = await fetch(`/.rootz/email-processing/authorization-requests/${userAddress}`);
+                const data = await response.json();
+                
+                if (data.success && data.requests.length > 0) {
+                    displayAuthorizationRequests(data.requests);
+                    clearStatus();
+                } else {
+                    document.getElementById('requestsList').innerHTML = '<p>No pending authorization requests found.</p><p>Send an email to process@rivetz.com to create an authorization request.</p>';
+                    clearStatus();
+                }
+            } catch (error) {
+                console.error('Failed to load requests:', error);
+                showStatus('Failed to load authorization requests: ' + error.message, 'error');
+                document.getElementById('requestsList').innerHTML = '<p>Error loading requests. Please refresh and try again.</p>';
+            }
+        }
+
+        // Display authorization requests
+        function displayAuthorizationRequests(requests) {
+            const container = document.getElementById('requestsList');
+            container.innerHTML = '';
+
+            requests.forEach(request => {
+                const requestDiv = document.createElement('div');
+                requestDiv.className = 'auth-request';
+                requestDiv.innerHTML = `
+                    <h4>Email Wallet Authorization</h4>
+                    <div class="email-preview">
+                        <strong>From:</strong> ${request.emailData.from}<br>
+                        <strong>Subject:</strong> ${request.emailData.subject}<br>
+                        <strong>Date:</strong> ${new Date(request.emailData.date).toLocaleString()}<br>
+                        <strong>Attachments:</strong> ${request.emailData.attachmentCount}<br>
+                        <strong>Credit Cost:</strong> ${request.creditCost} credits
+                    </div>
+                    <p><strong>IPFS Storage:</strong> <a href="${request.ipfsUrl}" target="_blank" class="ipfs-link">${request.ipfsHash}</a></p>
+                    <p><strong>Request ID:</strong> <code>${request.requestId}</code></p>
+                    <p><strong>Expires:</strong> ${new Date(request.expiresAt).toLocaleString()}</p>
+                    
+                    <div style="margin-top: 20px;">
+                        <button onclick="authorizeRequest('${request.requestId}')" class="button button-primary">
+                            Authorize with MetaMask
+                        </button>
+                        <button onclick="rejectRequest('${request.requestId}')" class="button button-danger">
+                            Reject
+                        </button>
+                    </div>
+                    
+                    <div id="request-status-${request.requestId}"></div>
+                `;
+                container.appendChild(requestDiv);
+            });
+        }
+
+        // Authorize request with MetaMask
+        async function authorizeRequest(requestId) {
+            try {
+                const statusDiv = document.getElementById(`request-status-${requestId}`);
+                statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Creating authorization signature...</div>';
+
+                // Create message hash for signing
+                const messageHash = ethers.utils.keccak256(
+                    ethers.utils.solidityPack(['bytes32'], [requestId])
+                );
+
+                // Sign message with MetaMask
+                const signature = await signer.signMessage(ethers.utils.arrayify(messageHash));
+                
+                statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Submitting authorization to blockchain...</div>';
+
+                // Send signature to platform for processing
+                const response = await fetch('/.rootz/email-processing/authorize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requestId,
+                        signature,
+                        userAddress
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = `
+                        <div class="status status-success">
+                            Authorization successful!<br>
+                            <strong>Transaction:</strong> <a href="https://amoy.polygonscan.com/tx/${result.transactionHash}" target="_blank">${result.transactionHash}</a><br>
+                            Your EMAIL_WALLET will be created shortly.
+                        </div>
+                    `;
+                    
+                    // Reload requests after successful authorization
+                    setTimeout(loadAuthorizationRequests, 3000);
+                } else {
+                    statusDiv.innerHTML = `<div class="status status-error">Authorization failed: ${result.error}</div>`;
+                }
+
+            } catch (error) {
+                console.error('Authorization failed:', error);
+                const statusDiv = document.getElementById(`request-status-${requestId}`);
+                statusDiv.innerHTML = `<div class="status status-error">Authorization failed: ${error.message}</div>`;
+            }
+        }
+
+        // Reject request
+        async function rejectRequest(requestId) {
+            if (!confirm('Are you sure you want to reject this email wallet creation?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/.rootz/email-processing/reject', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId, userAddress })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('Request rejected successfully', 'success');
+                    loadAuthorizationRequests();
+                } else {
+                    showStatus('Failed to reject request: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Failed to reject request:', error);
+                showStatus('Failed to reject request: ' + error.message, 'error');
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            const container = document.getElementById('statusMessages');
+            container.innerHTML = `<div class="status status-${type}">${message}</div>`;
+        }
+
+        // Clear status messages
+        function clearStatus() {
+            document.getElementById('statusMessages').innerHTML = '';
+        }
+
+        // Event listeners
+        document.getElementById('connectWallet').addEventListener('click', connectWallet);
+
+        // Auto-connect if MetaMask already connected
+        window.addEventListener('load', async () => {
+            if (typeof window.ethereum !== 'undefined' && window.ethereum.selectedAddress) {
+                await connectWallet();
+            }
+        });
+
+        // Handle account changes
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    updateWalletStatus(false);
+                    document.getElementById('requestsList').innerHTML = '<p>Please connect your MetaMask wallet.</p>';
+                } else {
+                    location.reload(); // Reload to refresh with new account
+                }
+            });
+        }
+    </script>
+</body>
+</html>

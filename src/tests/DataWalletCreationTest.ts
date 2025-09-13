@@ -6,10 +6,10 @@ import { Config } from '../core/configuration';
  * Tests the full email → IPFS → authorization → user approval → wallet creation flow
  */
 class DataWalletCreationTest {
-  private provider: ethers.providers.JsonRpcProvider;
-  private serviceWallet: ethers.Wallet;
-  private userWallet: ethers.Wallet;
-  private authContract: ethers.Contract;
+  private provider!: ethers.providers.JsonRpcProvider;
+  private serviceWallet!: ethers.Wallet;
+  private userWallet!: ethers.Wallet;
+  private authContract!: ethers.Contract;
   private config: Config;
   
   constructor() {
@@ -22,6 +22,14 @@ class DataWalletCreationTest {
     const rpcUrl = this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
     const servicePrivateKey = this.config.get('blockchain.serviceWalletPrivateKey');
     const contractAddress = this.config.get('blockchain.contractAuthorization');
+    
+    if (!servicePrivateKey) {
+      throw new Error('Service wallet private key not found in configuration');
+    }
+    
+    if (!contractAddress) {
+      throw new Error('Contract authorization address not found in configuration');
+    }
     
     // Initialize provider
     this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
@@ -57,7 +65,7 @@ class DataWalletCreationTest {
     
     try {
       // Use the existing authorization request from your test
-      const existingRequestId = '0x64fcc5fb648813306109562fffaebd160026b53f8bf0eb768a7c566848619593';
+      const existingRequestId = '0xca2dbc2e59f35556d80d821d3c29a949ee1f4e9f15eb193e5fcf46143d92ac62';
       
       console.log(`📋 Step 1: Verify existing authorization request`);
       console.log(`   Request ID: ${existingRequestId}`);
@@ -138,10 +146,6 @@ class DataWalletCreationTest {
       ethers.utils.solidityPack(['bytes32'], [requestId])
     );
     
-    const ethSignedMessageHash = ethers.utils.hashMessage(
-      ethers.utils.arrayify(messageHash)
-    );
-    
     // Sign with user wallet (simulates MetaMask)
     const signature = await this.userWallet.signMessage(ethers.utils.arrayify(messageHash));
     
@@ -197,14 +201,14 @@ class DataWalletCreationTest {
       // Prepare email data for wallet creation
       const emailData = {
         forwardedBy: 'rootz.global',
-        originalSender: 'real-ipfs-test@techcorp.com',
-        messageId: 'generated.test.message@rootz.global',
-        subject: 'Real IPFS Storage Test',
-        bodyHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('test-body-hash')),
-        emailHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('test-email-hash')),
-        emailHeadersHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('test-headers-hash')),
+        originalSender: 'wallet-creation-test@example.com',
+        messageId: 'generated.1757797200000.7b33b4de@rootz.global',
+        subject: 'Complete DATA_WALLET Creation Test',
+        bodyHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('071e9d4aba939be713a41dc754c17659034bd9022812a7dda724b53507588901')),
+        emailHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('9d95ab146272cae8d08b42804b8fbdd8889819ee93c76ab14fa090942d801d0f')),
+        emailHeadersHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes('5990e6022950898866205a6d768b43ace80fe7a2e0d23d4af37b0b0978a7add2')),
         attachmentCount: 0,
-        ipfsHash: 'QmTEST_REAL_IPFS_HASH',
+        ipfsHash: 'QmcYpsKJechgFb8Evd9DKZhLrfs1b4YPv75QSxjs1tJZu5',
         authResults: {
           spfPass: false,
           dkimValid: false,

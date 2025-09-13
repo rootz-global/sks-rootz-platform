@@ -141,6 +141,14 @@ export class RootzPlatform {
     console.log('✅ Test routes initialized');
     console.log('   Available at: /.rootz/test/*');
 
+    // Serve authorization page (static HTML)
+    router.get('/authorization', (req: Request, res: Response) => {
+      res.sendFile(path.join(__dirname, '..', 'public', 'authorization.html'));
+    });
+    
+    // Serve static files for authorization interface
+    router.use('/public', express.static(path.join(__dirname, '..', 'public')));
+
     // Client library serving (EPISTERY pattern)
     router.get('/lib/client.js', (req: Request, res: Response) => {
       res.setHeader('Content-Type', 'application/javascript');
