@@ -49,6 +49,11 @@ export interface EmailIPFSPackage {
   };
 }
 
+interface IPFSNodeInfo {
+  ID: string;
+  AgentVersion?: string;
+}
+
 /**
  * Real IPFS Service using rootz.digital IPFS infrastructure
  * Using multipart/form-data without external dependencies
@@ -84,7 +89,7 @@ export class LocalIPFSService {
         throw new Error(`IPFS node responded with status ${response.status}`);
       }
       
-      const nodeInfo = await response.json();
+      const nodeInfo = await response.json() as IPFSNodeInfo;
       console.log(`✅ Connected to IPFS node: ${nodeInfo.ID}`);
       console.log(`   Gateway: ${this.ipfsGatewayUrl}`);
       console.log(`   Agent: ${nodeInfo.AgentVersion || 'Unknown'}`);
@@ -196,7 +201,7 @@ export class LocalIPFSService {
       const result = await response.text();
       const lines = result.trim().split('\n');
       const lastLine = lines[lines.length - 1];
-      const uploadResult = JSON.parse(lastLine);
+      const uploadResult = JSON.parse(lastLine) as { Hash: string; Size: string };
       
       const ipfsHash = uploadResult.Hash;
       const ipfsUrl = `${this.ipfsGatewayUrl}/${ipfsHash}`;
@@ -373,7 +378,7 @@ export class LocalIPFSService {
         throw new Error(`Health check failed: ${response.status}`);
       }
       
-      const nodeInfo = await response.json();
+      const nodeInfo = await response.json() as IPFSNodeInfo;
       const stats = await this.getNodeStats();
       
       return {
