@@ -1,107 +1,104 @@
-import express, { Application, Request, Response } from 'express';
+// SKS Rootz Platform - Core Platform Class (EPISTERY Pattern)
+
+import express, { Request, Response, NextFunction } from 'express';
+import path from 'path';
 import { Config } from './config/Config';
 import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
-import { GraphEmailMonitorService } from './services/GraphEmailMonitorService';
 
 export class RootzPlatform {
-  private app: Application;
-  private config: any;
-  private statusController: StatusController;
-  private emailWalletController: EmailWalletController;
-  private emailMonitorService: GraphEmailMonitorService;
-  private domain: string;
+  private static instance: RootzPlatform;
+  private config: Config;
+  private isInitialized = false;
 
-  constructor(domain: string = 'localhost') {
-    this.domain = domain;
-    this.app = express();
-    this.config = Config.loadDomain(domain);
-    
-    // Initialize controllers
-    this.statusController = new StatusController(domain);
-    this.emailWalletController = new EmailWalletController(domain);
-    this.emailMonitorService = new GraphEmailMonitorService(domain);
-    
-    this.setupMiddleware();
-    this.setupRoutes();
+  private constructor() {
+    this.config = new Config();
   }
 
-  private setupMiddleware(): void {
-    // Basic middleware
-    this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
-    
-    // CORS for API access
-    this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-      
-      if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-      } else {
-        next();
-      }
-    });
-
-    // Request logging
-    this.app.use((req, res, next) => {
-      console.log(`📡 ${req.method} ${req.path} - ${req.ip}`);
-      next();
-    });
+  public static async connect(): Promise<RootzPlatform> {
+    if (!RootzPlatform.instance) {
+      RootzPlatform.instance = new RootzPlatform();
+      await RootzPlatform.instance.initialize();
+    }
+    return RootzPlatform.instance;
   }
 
-  private setupRoutes(): void {
-    // Platform status routes
-    this.app.get('/.rootz/status', (req, res) => this.statusController.getStatus(req, res));
-    this.app.get('/.rootz/health', (req, res) => this.statusController.getHealth(req, res));
+  private async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+    
+    console.log('🔧 Initializing SKS Rootz Platform...');
+    
+    // Load configuration (EPISTERY pattern)
+    await this.config.initialize();
+    
+    this.isInitialized = true;
+    console.log('✅ Platform initialization complete');
+  }
 
+  // Attach to existing Express app (EPISTERY pattern)
+  public async attach(app: express.Application): Promise<void> {
+    console.log('🔗 Attaching SKS Rootz Platform to existing app...');
+    
+    // Add body parsing middleware
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    
+    // Domain resolution middleware (EPISTERY pattern)
+    app.use(this.domainResolutionMiddleware.bind(this));
+    
+    // Attach platform routes under /.rootz/ (well-known path)
+    app.use('/.rootz', this.createRoutes());
+    
+    // Serve client library (EPISTERY pattern)
+    app.use('/.rootz/lib', express.static(path.join(__dirname, 'client')));
+    
+    console.log('✅ Platform attached successfully');
+  }
+
+  private domainResolutionMiddleware(req: Request, res: Response, next: NextFunction): void {
+    // Domain-aware configuration (EPISTERY pattern)
+    const domain = req.hostname || 'localhost';
+    
+    // Load domain-specific configuration if needed
+    req.app.locals.domain = domain;
+    req.app.locals.config = this.config.loadDomain(domain);
+    
+    next();
+  }
+
+  private createRoutes(): express.Router {
+    const router = express.Router();
+    
+    // Status endpoint (EPISTERY pattern)
+    const statusController = new StatusController();
+    router.get('/status', statusController.getStatus.bind(statusController));
+    
+    // Health check endpoint
+    router.get('/health', (req: Request, res: Response) => {
+      res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+    });
+    
     // Email Wallet routes
-    this.app.post('/.rootz/email-wallet/register', (req, res) => 
-      this.emailWalletController.register(req, res));
+    const emailWalletController = new EmailWalletController();
+    router.post('/email-wallet/register', emailWalletController.register.bind(emailWalletController));
+    router.get('/email-wallet/balance/:address', emailWalletController.getBalance.bind(emailWalletController));
     
-    this.app.get('/.rootz/email-wallet/balance/:address', (req, res) => 
-      this.emailWalletController.getBalance(req, res));
-    
-    this.app.get('/.rootz/email-wallet/dashboard/:address', (req, res) => 
-      this.emailWalletController.getUserDashboard(req, res));
-
     // Email monitoring routes (NEW)
-    this.app.post('/.rootz/email-monitoring/start', (req, res) => 
-      this.emailWalletController.startEmailMonitoring(req, res));
-    
-    this.app.post('/.rootz/email-monitoring/stop', (req, res) => 
-      this.emailWalletController.stopEmailMonitoring(req, res));
-    
-    this.app.get('/.rootz/email-monitoring/status', (req, res) => 
-      this.emailWalletController.getEmailMonitoringStatus(req, res));
-    
-    this.app.post('/.rootz/email-monitoring/test', (req, res) => 
-      this.emailWalletController.testEmailProcessing(req, res));
+    router.post('/email-monitoring/start', emailWalletController.startEmailMonitoring.bind(emailWalletController));
+    router.post('/email-monitoring/stop', emailWalletController.stopEmailMonitoring.bind(emailWalletController));
+    router.get('/email-monitoring/status', emailWalletController.getEmailMonitoringStatus.bind(emailWalletController));
+    router.post('/email-monitoring/test', emailWalletController.testEmailProcessing.bind(emailWalletController));
 
     // Wallet proposal routes (NEW)
-    this.app.post('/.rootz/email-wallet/propose', (req, res) => 
-      this.emailWalletController.createWalletProposal(req, res));
+    router.post('/email-wallet/propose', emailWalletController.createWalletProposal.bind(emailWalletController));
+    router.post('/email-wallet/authorize', emailWalletController.authorizeWallet.bind(emailWalletController));
+    router.get('/email-wallet/dashboard/:address', emailWalletController.getUserDashboard.bind(emailWalletController));
     
-    this.app.post('/.rootz/email-wallet/authorize', (req, res) => 
-      this.emailWalletController.authorizeWallet(req, res));
-
-    // Test routes
-    this.app.get('/.rootz/test/blockchain-write', async (req, res) => {
-      try {
-        // Test basic blockchain write capability
-        const result = await this.emailWalletController.testBlockchainWrite(req, res);
-      } catch (error) {
-        res.status(500).json({
-          success: false,
-          message: 'Blockchain write test failed',
-          error: error.message
-        });
-      }
-    });
+    // Test endpoints
+    router.get('/test/blockchain-write', emailWalletController.testBlockchainWrite.bind(emailWalletController));
 
     // Client library serving (EPISTERY pattern)
-    this.app.get('/.rootz/lib/client.js', (req, res) => {
+    router.get('/lib/client.js', (req: Request, res: Response) => {
       res.setHeader('Content-Type', 'application/javascript');
       res.send(`
 // SKS Rootz Platform Client Library
@@ -158,88 +155,7 @@ window.RootzClient = RootzClient;
 window.rootzClient = new RootzClient();
       `);
     });
-
-    // Root route
-    this.app.get('/', (req, res) => {
-      res.json({
-        platform: 'SKS Rootz Platform',
-        version: this.config.platform?.version || '1.0.0',
-        environment: this.config.platform?.environment || 'development',
-        endpoints: {
-          status: '/.rootz/status',
-          health: '/.rootz/health',
-          clientLibrary: '/.rootz/lib/client.js',
-          emailWallet: {
-            register: 'POST /.rootz/email-wallet/register',
-            balance: 'GET /.rootz/email-wallet/balance/:address',
-            dashboard: 'GET /.rootz/email-wallet/dashboard/:address',
-            propose: 'POST /.rootz/email-wallet/propose',
-            authorize: 'POST /.rootz/email-wallet/authorize'
-          },
-          emailMonitoring: {
-            start: 'POST /.rootz/email-monitoring/start',
-            stop: 'POST /.rootz/email-monitoring/stop',
-            status: 'GET /.rootz/email-monitoring/status',
-            test: 'POST /.rootz/email-monitoring/test'
-          }
-        }
-      });
-    });
-
-    // 404 handler
-    this.app.use('*', (req, res) => {
-      res.status(404).json({
-        error: 'Not Found',
-        message: `Endpoint ${req.method} ${req.originalUrl} not found`,
-        availableEndpoints: '/.rootz/status for platform information'
-      });
-    });
-  }
-
-  public async initialize(): Promise<void> {
-    console.log('🔧 Initializing SKS Rootz Platform...');
     
-    // Validate configuration
-    if (!this.config) {
-      throw new Error('Configuration not loaded. Check ~/.data-wallet/localhost/config.ini');
-    }
-
-    // Auto-start email monitoring if configured
-    if (this.config.email?.microsoftGraph?.enabled && this.config.services?.emailWallet) {
-      console.log('📧 Auto-starting email monitoring service...');
-      try {
-        await this.emailMonitorService.startMonitoring();
-        console.log('✅ Email monitoring started automatically');
-      } catch (error) {
-        console.error('⚠️ Failed to auto-start email monitoring:', error.message);
-        console.log('💡 You can start it manually via /.rootz/email-monitoring/start');
-      }
-    }
-
-    console.log('✅ Platform initialization complete');
-  }
-
-  public listen(port: number = 3000): void {
-    this.app.listen(port, () => {
-      console.log(`🚀 SKS Rootz Platform listening on port ${port}`);
-      console.log(`📍 Platform status: http://localhost:${port}/.rootz/status`);
-      console.log(`🔍 Health check: http://localhost:${port}/.rootz/health`);
-      console.log(`📧 Email monitoring: http://localhost:${port}/.rootz/email-monitoring/status`);
-    });
-  }
-
-  public getApp(): Application {
-    return this.app;
-  }
-
-  public async shutdown(): Promise<void> {
-    console.log('🛑 Shutting down platform...');
-    
-    // Stop email monitoring
-    if (this.emailMonitorService) {
-      this.emailMonitorService.stopMonitoring();
-    }
-    
-    console.log('✅ Platform shutdown complete');
+    return router;
   }
 }

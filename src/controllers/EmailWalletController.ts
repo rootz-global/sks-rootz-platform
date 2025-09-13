@@ -9,14 +9,45 @@ export class EmailWalletController extends Controller {
 
   constructor(domain: string = 'localhost') {
     super();
-    this.blockchainService = new BlockchainService(domain);
-    this.emailMonitorService = new GraphEmailMonitorService(domain);
+    // We'll get config from the request for now
+    this.blockchainService = null as any; // Initialize later with config
+    this.emailMonitorService = null as any; // Initialize later with config
+  }
+
+  private initializeServices(req: Request): void {
+    if (!this.blockchainService) {
+      const config = this.getConfigFromRequest(req);
+      this.blockchainService = new BlockchainService(config);
+      this.emailMonitorService = new GraphEmailMonitorService('localhost'); // TODO: get domain from request
+    }
+  }
+
+  private validateEthereumAddress(address: string): string | null {
+    try {
+      // Basic Ethereum address validation
+      if (!address || typeof address !== 'string') {
+        return null;
+      }
+      
+      // Remove 0x prefix if present and validate hex
+      const cleanAddress = address.toLowerCase().startsWith('0x') ? address : '0x' + address;
+      
+      if (!/^0x[a-fA-F0-9]{40}$/.test(cleanAddress)) {
+        return null;
+      }
+      
+      return cleanAddress;
+    } catch (error) {
+      return null;
+    }
   }
 
   // User Registration
   public async register(req: Request, res: Response): Promise<void> {
     try {
       console.log('📝 [REGISTER] Processing user registration request');
+      
+      this.initializeServices(req);
       
       const { userAddress, signature, message } = req.body;
       
@@ -26,7 +57,7 @@ export class EmailWalletController extends Controller {
       }
 
       // Validate Ethereum address format
-      const validAddress = this.blockchainService.validateAddress(userAddress);
+      const validAddress = this.validateEthereumAddress(userAddress);
       if (!validAddress) {
         this.sendError(res, 'Invalid Ethereum address format', 400);
         return;
@@ -42,35 +73,40 @@ export class EmailWalletController extends Controller {
         return;
       }
 
-      // Register user with initial credits
-      const initialCredits = 60; // Default credit allocation
-      const registrationResult = await this.blockchainService.registerUser(
-        validAddress,
-        initialCredits,
-        signature,
-        message
-      );
+      // Register user with default email
+      const defaultEmail = `${validAddress.toLowerCase()}@temp.rootz.global`;
+      const success = await this.blockchainService.registerEmailWallet(validAddress, defaultEmail);
+      
+      if (!success) {
+        this.sendError(res, 'Registration failed', 500);
+        return;
+      }
+
+      // Deposit initial credits
+      await this.blockchainService.depositCredits(validAddress, "0.006");
 
       console.log(`✅ [REGISTER] User ${validAddress} registered successfully`);
       
       this.sendResponse(res, {
         success: true,
         userAddress: validAddress,
-        initialCredits,
-        transactionHash: registrationResult.transactionHash,
-        registrationId: registrationResult.registrationId,
+        email: defaultEmail,
+        initialCredits: 60,
         message: 'User registered successfully'
       });
       
     } catch (error) {
       console.error('❌ [REGISTER] Registration failed:', error);
-      this.sendError(res, `Registration failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      this.sendError(res, `Registration failed: ${errorMessage}`, 500);
     }
   }
 
   // Get User Credit Balance
   public async getBalance(req: Request, res: Response): Promise<void> {
     try {
+      this.initializeServices(req);
+      
       const { address } = req.params;
       
       if (!address) {
@@ -78,7 +114,7 @@ export class EmailWalletController extends Controller {
         return;
       }
 
-      const validAddress = this.blockchainService.validateAddress(address);
+      const validAddress = this.validateEthereumAddress(address);
       if (!validAddress) {
         this.sendError(res, 'Invalid Ethereum address format', 400);
         return;
@@ -104,7 +140,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [BALANCE] Balance check failed:', error);
-      this.sendError(res, `Balance check failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Balance check failed';
+      this.sendError(res, `Balance check failed: ${errorMessage}`, 500);
     }
   }
 
@@ -112,6 +149,8 @@ export class EmailWalletController extends Controller {
   public async startEmailMonitoring(req: Request, res: Response): Promise<void> {
     try {
       console.log('🚀 [EMAIL] Starting email monitoring service');
+      
+      this.initializeServices(req);
       
       await this.emailMonitorService.startMonitoring();
       
@@ -123,13 +162,16 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [EMAIL] Failed to start email monitoring:', error);
-      this.sendError(res, `Failed to start email monitoring: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start email monitoring';
+      this.sendError(res, `Failed to start email monitoring: ${errorMessage}`, 500);
     }
   }
 
   public async stopEmailMonitoring(req: Request, res: Response): Promise<void> {
     try {
       console.log('🛑 [EMAIL] Stopping email monitoring service');
+      
+      this.initializeServices(req);
       
       this.emailMonitorService.stopMonitoring();
       
@@ -140,12 +182,15 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [EMAIL] Failed to stop email monitoring:', error);
-      this.sendError(res, `Failed to stop email monitoring: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to stop email monitoring';
+      this.sendError(res, `Failed to stop email monitoring: ${errorMessage}`, 500);
     }
   }
 
   public async getEmailMonitoringStatus(req: Request, res: Response): Promise<void> {
     try {
+      this.initializeServices(req);
+      
       const status = this.emailMonitorService.getStatus();
       
       this.sendResponse(res, {
@@ -155,7 +200,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [EMAIL] Failed to get email monitoring status:', error);
-      this.sendError(res, `Failed to get email monitoring status: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get email monitoring status';
+      this.sendError(res, `Failed to get email monitoring status: ${errorMessage}`, 500);
     }
   }
 
@@ -163,6 +209,8 @@ export class EmailWalletController extends Controller {
   public async testEmailProcessing(req: Request, res: Response): Promise<void> {
     try {
       console.log('🧪 [EMAIL] Testing email processing');
+      
+      this.initializeServices(req);
       
       await this.emailMonitorService.testEmailProcessing();
       
@@ -173,7 +221,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [EMAIL] Email processing test failed:', error);
-      this.sendError(res, `Email processing test failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Email processing test failed';
+      this.sendError(res, `Email processing test failed: ${errorMessage}`, 500);
     }
   }
 
@@ -181,6 +230,8 @@ export class EmailWalletController extends Controller {
   public async createWalletProposal(req: Request, res: Response): Promise<void> {
     try {
       console.log('📧 [PROPOSAL] Creating wallet proposal');
+      
+      this.initializeServices(req);
       
       const { 
         userAddress, 
@@ -195,7 +246,7 @@ export class EmailWalletController extends Controller {
         return;
       }
 
-      const validAddress = this.blockchainService.validateAddress(userAddress);
+      const validAddress = this.validateEthereumAddress(userAddress);
       if (!validAddress) {
         this.sendError(res, 'Invalid Ethereum address format', 400);
         return;
@@ -240,7 +291,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [PROPOSAL] Proposal creation failed:', error);
-      this.sendError(res, `Proposal creation failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Proposal creation failed';
+      this.sendError(res, `Proposal creation failed: ${errorMessage}`, 500);
     }
   }
 
@@ -273,13 +325,16 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [AUTHORIZE] Authorization failed:', error);
-      this.sendError(res, `Authorization failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Authorization failed';
+      this.sendError(res, `Authorization failed: ${errorMessage}`, 500);
     }
   }
 
   // User Dashboard Data
   public async getUserDashboard(req: Request, res: Response): Promise<void> {
     try {
+      this.initializeServices(req);
+      
       const { address } = req.params;
       
       if (!address) {
@@ -287,7 +342,7 @@ export class EmailWalletController extends Controller {
         return;
       }
 
-      const validAddress = this.blockchainService.validateAddress(address);
+      const validAddress = this.validateEthereumAddress(address);
       if (!validAddress) {
         this.sendError(res, 'Invalid Ethereum address format', 400);
         return;
@@ -310,7 +365,7 @@ export class EmailWalletController extends Controller {
         user: {
           address: validAddress,
           credits,
-          registrationDate: userRegistration?.registrationDate,
+          registrationDate: userRegistration?.registeredAt ? new Date(userRegistration.registeredAt * 1000).toISOString() : null,
           registrationId: userRegistration?.registrationId
         },
         pendingProposals: [], // TODO: Implement
@@ -320,7 +375,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('❌ [DASHBOARD] Dashboard load failed:', error);
-      this.sendError(res, `Dashboard load failed: ${error.message}`, 500);
+      const errorMessage = error instanceof Error ? error.message : 'Dashboard load failed';
+      this.sendError(res, `Dashboard load failed: ${errorMessage}`, 500);
     }
   }
 
@@ -328,6 +384,8 @@ export class EmailWalletController extends Controller {
   public async testBlockchainWrite(req: Request, res: Response): Promise<void> {
     try {
       console.log(`[TEST] Starting blockchain write test`);
+      
+      this.initializeServices(req);
       
       // Test basic write capability
       const success = await this.blockchainService.testBlockchainWrite();
@@ -343,7 +401,8 @@ export class EmailWalletController extends Controller {
       
     } catch (error) {
       console.error('[TEST] Blockchain write test error:', error);
-      this.sendError(res, 'Blockchain write test failed', 500);
+      const errorMessage = error instanceof Error ? error.message : 'Blockchain write test failed';
+      this.sendError(res, errorMessage, 500);
     }
   }
 }

@@ -27,46 +27,87 @@ interface ProcessedEmail {
 }
 
 export class GraphEmailMonitorService {
-  private graphClient: Client;
+  private graphClient: Client | null = null;
   private config: any;
-  private blockchainService: BlockchainService;
+  private blockchainService: BlockchainService | null = null;
   private isRunning: boolean = false;
   private monitoringInterval: NodeJS.Timer | null = null;
   private lastProcessedTime: Date;
 
   constructor(domain: string = 'localhost') {
-    this.config = Config.loadDomain(domain);
-    this.blockchainService = new BlockchainService(domain);
+    // For now, use a mock config until we fix the Config loading
+    this.config = this.getMockConfig();
     this.lastProcessedTime = new Date(Date.now() - 60000); // Start 1 minute ago
     
-    this.initializeGraphClient();
+    try {
+      this.initializeGraphClient();
+      this.blockchainService = new BlockchainService(this.config);
+    } catch (error) {
+      console.warn('⚠️ Failed to initialize Graph client or blockchain service:', error);
+    }
+  }
+
+  private getMockConfig(): any {
+    return {
+      email: {
+        microsoftGraph: {
+          enabled: false, // Disabled until properly configured
+          tenantId: 'mock-tenant-id',
+          clientId: 'mock-client-id',
+          clientSecret: 'mock-client-secret',
+          userPrincipalName: 'process@rivetz.com',
+          pollIntervalMinutes: 1
+        }
+      },
+      blockchain: {
+        rpcUrl: 'https://rpc-amoy.polygon.technology/',
+        serviceWalletPrivateKey: process.env.SERVICE_WALLET_PRIVATE_KEY || '',
+        contracts: {
+          registration: '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F'
+        }
+      }
+    };
   }
 
   private initializeGraphClient(): void {
     console.log('🔧 Initializing Microsoft Graph client...');
     
-    const clientSecretCredential = new ClientSecretCredential(
-      this.config.email?.microsoftGraph?.tenantId,
-      this.config.email?.microsoftGraph?.clientId,
-      this.config.email?.microsoftGraph?.clientSecret
-    );
+    if (!this.config.email?.microsoftGraph?.enabled) {
+      console.log('📧 Microsoft Graph integration disabled in configuration');
+      return;
+    }
 
-    this.graphClient = Client.initWithMiddleware({
-      authProvider: {
-        getAccessToken: async () => {
-          const token = await clientSecretCredential.getToken('https://graph.microsoft.com/.default');
-          return token?.token || '';
+    try {
+      const clientSecretCredential = new ClientSecretCredential(
+        this.config.email.microsoftGraph.tenantId,
+        this.config.email.microsoftGraph.clientId,
+        this.config.email.microsoftGraph.clientSecret
+      );
+
+      this.graphClient = Client.initWithMiddleware({
+        authProvider: {
+          getAccessToken: async () => {
+            const token = await clientSecretCredential.getToken('https://graph.microsoft.com/.default');
+            return token?.token || '';
+          }
         }
-      }
-    });
+      });
 
-    console.log('✅ Microsoft Graph client initialized');
+      console.log('✅ Microsoft Graph client initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize Graph client:', error);
+      this.graphClient = null;
+    }
   }
 
   public async startMonitoring(): Promise<void> {
     if (this.isRunning) {
       console.log('⚠️ Email monitoring already running');
       return;
+    }
+
+    if (!this.graphClient) {
+      throw new Error('Microsoft Graph client not available. Check configuration.');
     }
 
     console.log('🚀 Starting email monitoring service...');
@@ -106,6 +147,10 @@ export class GraphEmailMonitorService {
 
   private async testConnection(): Promise<void> {
     try {
+      if (!this.graphClient) {
+        throw new Error('Graph client not initialized');
+      }
+
       console.log('🔍 Testing Microsoft Graph connection...');
       
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
@@ -114,12 +159,18 @@ export class GraphEmailMonitorService {
       console.log(`✅ Connected to Microsoft Graph for user: ${user.displayName} (${user.mail})`);
     } catch (error) {
       console.error('❌ Microsoft Graph connection test failed:', error);
-      throw new Error(`Graph API connection failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Connection test failed';
+      throw new Error(`Graph API connection failed: ${errorMessage}`);
     }
   }
 
   private async checkForNewEmails(): Promise<void> {
     try {
+      if (!this.graphClient) {
+        console.warn('⚠️ Graph client not available');
+        return;
+      }
+
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
       const filterDate = this.lastProcessedTime.toISOString();
       
@@ -187,11 +238,13 @@ export class GraphEmailMonitorService {
       }
 
       // Check if user is registered
-      const isRegistered = await this.blockchainService.isUserRegistered(recipientAddress);
-      if (!isRegistered) {
-        console.log(`⚠️ Recipient ${recipientAddress} is not registered. Skipping email.`);
-        await this.markEmailAsRead(message.id);
-        return;
+      if (this.blockchainService) {
+        const isRegistered = await this.blockchainService.isUserRegistered(recipientAddress);
+        if (!isRegistered) {
+          console.log(`⚠️ Recipient ${recipientAddress} is not registered. Skipping email.`);
+          await this.markEmailAsRead(message.id);
+          return;
+        }
       }
 
       // Process email for wallet creation proposal
@@ -214,6 +267,10 @@ export class GraphEmailMonitorService {
 
   private async fetchEmailAttachments(messageId: string): Promise<any[]> {
     try {
+      if (!this.graphClient) {
+        return [];
+      }
+
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
       const attachments = await this.graphClient
         .api(`/users/${userPrincipalName}/messages/${messageId}/attachments`)
@@ -229,7 +286,7 @@ export class GraphEmailMonitorService {
   private async determineRecipientWallet(emailData: EmailData): Promise<string | null> {
     // Implementation depends on your routing logic
     // For now, return a test wallet address if sender is known
-    const knownSenders = {
+    const knownSenders: { [key: string]: string } = {
       'steven@sprague.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b',
       'demo@techcorp.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b'
     };
@@ -286,9 +343,13 @@ export class GraphEmailMonitorService {
 
   private async markEmailAsRead(messageId: string): Promise<void> {
     try {
+      if (!this.graphClient) {
+        return;
+      }
+
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
       await this.graphClient
-        .api(`/users/${messageId}/messages/${messageId}`)
+        .api(`/users/${userPrincipalName}/messages/${messageId}`)
         .patch({ isRead: true });
       
       console.log(`✅ Marked email ${messageId} as read`);
@@ -326,9 +387,12 @@ export class GraphEmailMonitorService {
     return {
       isRunning: this.isRunning,
       lastProcessedTime: this.lastProcessedTime,
+      graphClientAvailable: !!this.graphClient,
+      blockchainServiceAvailable: !!this.blockchainService,
       config: {
         userPrincipalName: this.config.email?.microsoftGraph?.userPrincipalName,
-        pollInterval: this.config.email?.microsoftGraph?.pollIntervalMinutes
+        pollInterval: this.config.email?.microsoftGraph?.pollIntervalMinutes,
+        enabled: this.config.email?.microsoftGraph?.enabled
       }
     };
   }
