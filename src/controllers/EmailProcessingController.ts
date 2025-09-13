@@ -21,6 +21,21 @@ export class EmailProcessingController {
     this.emailParser = new EmailParser();
     
     console.log('🚀 Initializing Email Processing Controller...');
+    
+    // Initialize IPFS service asynchronously
+    this.initializeServices();
+  }
+
+  /**
+   * Initialize services asynchronously
+   */
+  private async initializeServices(): Promise<void> {
+    try {
+      await this.ipfsService.initialize();
+      console.log('✅ Email Processing Controller ready');
+    } catch (error) {
+      console.error('❌ Failed to initialize Email Processing Controller:', error);
+    }
   }
 
   /**
