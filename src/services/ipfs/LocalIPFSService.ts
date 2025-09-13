@@ -1,6 +1,10 @@
 import { Config } from '../../core/configuration';
-import fetch from 'node-fetch';
-import FormData from 'form-data';
+import * as nodeFetch from 'node-fetch';
+import * as FormDataNode from 'form-data';
+
+// Type assertions for proper TypeScript compatibility
+const fetch = nodeFetch.default as any;
+const FormData = FormDataNode.default as any;
 
 export interface IPFSUploadResult {
   success: boolean;
