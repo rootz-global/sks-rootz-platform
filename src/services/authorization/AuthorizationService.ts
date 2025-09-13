@@ -30,9 +30,9 @@ export interface ProcessingResult {
 }
 
 export class AuthorizationService {
-  private provider: ethers.providers.JsonRpcProvider;
-  private serviceWallet: ethers.Wallet;
-  private authContract: ethers.Contract;
+  private provider!: ethers.providers.JsonRpcProvider;
+  private serviceWallet!: ethers.Wallet;
+  private authContract!: ethers.Contract;
   private config: Config;
   
   constructor(config: Config) {
