@@ -1,7 +1,7 @@
 {
   "name": "sks-rootz-platform",
   "version": "1.0.0",
-  "description": "SKS Rootz Platform - EPISTERY-style unified services platform",
+  "description": "SKS Rootz Platform - EPISTERY-style unified services platform with Email Integration",
   "main": "dist/index.js",
   "type": "commonjs",
   "repository": {
@@ -17,7 +17,9 @@
     "ai-data-wallet",
     "epistery",
     "microservices",
-    "typescript"
+    "typescript",
+    "microsoft-graph",
+    "email-integration"
   ],
   "scripts": {
     "build": "tsc",
@@ -28,6 +30,9 @@
     "deploy": "./scripts/deploy/deploy.sh"
   },
   "dependencies": {
+    "@azure/identity": "^4.0.1",
+    "@azure/msal-node": "^2.6.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "bcryptjs": "2.4.3",
     "cookie-parser": "1.4.7",
     "cors": "2.8.5",
@@ -38,6 +43,7 @@
     "ini": "5.0.0",
     "joi": "17.9.2",
     "jsonwebtoken": "9.0.2",
+    "node-fetch": "^3.3.2",
     "pg": "8.11.0",
     "redis": "4.6.0",
     "winston": "3.10.0"
