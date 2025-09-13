@@ -48,7 +48,7 @@ export class LocalIPFSService {
         throw new Error(`Pinata authentication failed: ${response.status}`);
       }
       
-      const authResult = await response.json();
+      const authResult = await response.json() as { message?: string };
       console.log('✅ Connected to Pinata IPFS service');
       console.log(`   Gateway: https://gateway.pinata.cloud/ipfs`);
       console.log(`   Auth: ${authResult.message || 'Success'}`);
@@ -141,7 +141,7 @@ export class LocalIPFSService {
         throw new Error(`Pinata upload failed: ${response.status} - ${errorText}`);
       }
       
-      const result = await response.json();
+      const result = await response.json() as { IpfsHash: string; PinSize: number };
       const ipfsHash = result.IpfsHash;
       const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
       

@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import EmailProcessingController from '../controllers/EmailProcessingController';
-import AuthorizationController from '../controllers/AuthorizationController';
 import { Config } from '../core/configuration';
 
 export function createEmailProcessingRoutes(config: Config): Router {
   const router = Router();
   const controller = new EmailProcessingController(config);
-  const authController = new AuthorizationController(config);
   
   /**
    * Process email and create authorization request
@@ -15,22 +13,16 @@ export function createEmailProcessingRoutes(config: Config): Router {
   router.post('/process', (req, res) => controller.processEmail(req, res));
   
   /**
-   * Get authorization requests for user (for UI)
-   * GET /.rootz/email-processing/authorization-requests/:userAddress
+   * Get authorization request details (for web interface)
+   * GET /.rootz/email-processing/authorization-requests/:requestId
    */
-  router.get('/authorization-requests/:userAddress', (req, res) => authController.getAuthorizationRequests(req, res));
+  router.get('/authorization-requests/:requestId', (req, res) => controller.getAuthorizationRequest(req, res));
   
   /**
-   * Process user authorization (user signs, service submits)
+   * Process user authorization
    * POST /.rootz/email-processing/authorize
    */
-  router.post('/authorize', (req, res) => authController.processUserAuthorization(req, res));
-  
-  /**
-   * Reject authorization request
-   * POST /.rootz/email-processing/reject
-   */
-  router.post('/reject', (req, res) => authController.rejectRequest(req, res));
+  router.post('/authorize', (req, res) => controller.processUserAuthorization(req, res));
   
   /**
    * Process user authorization (legacy endpoint)
