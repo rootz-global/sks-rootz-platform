@@ -30,6 +30,13 @@ export interface DomainConfig {
     secretsManagement?: boolean;
     aiWallet?: boolean;
   };
+  platform?: {
+    port?: number;
+    name?: string;
+    version?: string;
+    environment?: string;
+    logLevel?: string;
+  };
 }
 
 export class Config {
