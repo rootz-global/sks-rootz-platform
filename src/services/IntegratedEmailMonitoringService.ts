@@ -26,9 +26,19 @@ export class IntegratedEmailMonitoringService {
    */
   private async initializeGraphClient() {
     try {
-      const { Client } = require('@azure/msal-node');
-      const { TokenCredentialAuthenticationProvider } = require('@azure/msal-node');
-      const { GraphServiceClient } = require('@microsoft/microsoft-graph-client');
+      console.log('🔧 Initializing Microsoft Graph client...');
+      
+      // Check if packages are available
+      let msal, GraphServiceClient;
+      try {
+        msal = require('@azure/msal-node');
+        const graphClient = require('@microsoft/microsoft-graph-client');
+        GraphServiceClient = graphClient.GraphServiceClient;
+      } catch (error) {
+        console.error('❌ Microsoft Graph packages not installed:', error.message);
+        console.log('💡 Run: npm install @azure/msal-node @microsoft/microsoft-graph-client');
+        return false;
+      }
 
       const clientConfig = {
         auth: {
@@ -42,15 +52,12 @@ export class IntegratedEmailMonitoringService {
         scopes: ['https://graph.microsoft.com/.default'],
       };
 
-      const msal = require('@azure/msal-node');
       const cca = new msal.ConfidentialClientApplication(clientConfig);
       
       // Get access token
       const response = await cca.acquireTokenByClientCredential(clientCredentialRequest);
       
       if (response && response.accessToken) {
-        const { GraphServiceClient } = require('@microsoft/microsoft-graph-client');
-        
         this.graphClient = GraphServiceClient.init({
           authProvider: (done: any) => {
             done(null, response.accessToken);
@@ -66,6 +73,7 @@ export class IntegratedEmailMonitoringService {
 
     } catch (error) {
       console.error('❌ Failed to initialize Microsoft Graph client:', error);
+      console.log('📧 Email monitoring will not work without Microsoft Graph');
       return false;
     }
   }
