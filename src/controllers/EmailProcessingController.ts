@@ -93,13 +93,11 @@ export class EmailProcessingController {
       // Step 3: Create blockchain authorization request
       console.log(`⛓️ Step 3: Creating blockchain authorization request...`);
       const authToken = `0x${Math.random().toString(16).substring(2, 18)}`;
-      const attachmentCount = 0; // TODO: Count actual attachments
       
       const authResult = await this.authService.createAuthorizationRequest(
         userAddress,
-        authToken,
-        emailPackage.emailData.hashes.emailHash,
-        attachmentCount
+        parsedEmail,
+        ipfsResult.ipfsHash || ''
       );
 
       if (!authResult.success) {
