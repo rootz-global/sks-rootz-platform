@@ -5,6 +5,7 @@ import path from 'path';
 import { Config } from './config/Config';
 import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
+import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 
 // CORS middleware function
 function enableCORS(req: Request, res: Response, next: NextFunction): void {
@@ -116,6 +117,17 @@ export class RootzPlatform {
     // Test endpoints
     router.get('/test/blockchain-write', emailWalletController.testBlockchainWrite.bind(emailWalletController));
 
+    // EMAIL PROCESSING ROUTES (NEW) - Complete Email-to-Blockchain System
+    console.log('🔧 Initializing Email Processing routes...');
+    try {
+      const emailProcessingRoutes = createEmailProcessingRoutes(this.config);
+      router.use('/email-processing', emailProcessingRoutes);
+      console.log('✅ Email Processing routes initialized');
+      console.log('   Available at: /.rootz/email-processing/*');
+    } catch (error) {
+      console.error('❌ Failed to initialize Email Processing routes:', error);
+    }
+
     // Client library serving (EPISTERY pattern)
     router.get('/lib/client.js', (req: Request, res: Response) => {
       res.setHeader('Content-Type', 'application/javascript');
@@ -163,6 +175,30 @@ class RootzClient {
 
   async getEmailMonitoringStatus() {
     const response = await fetch(\`\${this.baseUrl}/.rootz/email-monitoring/status\`);
+    return response.json();
+  }
+
+  // NEW: Email Processing Methods
+  async processEmail(userAddress, rawEmail, notifyUser = true) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/email-processing/process\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userAddress, rawEmail, notifyUser })
+    });
+    return response.json();
+  }
+
+  async testEmailParsing(rawEmail) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/email-processing/test-parse\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rawEmail })
+    });
+    return response.json();
+  }
+
+  async getEmailProcessingHealth() {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/email-processing/health\`);
     return response.json();
   }
 }
