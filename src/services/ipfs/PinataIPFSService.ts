@@ -1,4 +1,5 @@
 import { Config } from '../../core/configuration';
+import fetch from 'node-fetch';
 
 export interface IPFSUploadResult {
   success: boolean;
@@ -35,7 +36,6 @@ export class LocalIPFSService {
       console.log('🔌 Connecting to Pinata IPFS service...');
       
       // Test Pinata connection
-      const fetch = require('node-fetch');
       const response = await fetch('https://api.pinata.cloud/data/testAuthentication', {
         method: 'GET',
         headers: {
@@ -126,7 +126,6 @@ export class LocalIPFSService {
       });
       form.append('pinataMetadata', metadata);
       
-      const fetch = require('node-fetch');
       const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
         method: 'POST',
         headers: {
