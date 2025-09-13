@@ -50,7 +50,6 @@
     "express-rate-limit": "6.8.0",
     "helmet": "7.0.0",
     "ini": "5.0.0",
-    "ipfs-http-client": "^60.0.1",
     "joi": "17.9.2",
     "jsonwebtoken": "9.0.2",
     "mailparser": "^3.6.5",
