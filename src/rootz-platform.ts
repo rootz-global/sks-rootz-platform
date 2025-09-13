@@ -35,6 +35,10 @@ export class RootzPlatform {
     console.log('✅ Platform initialization complete');
   }
 
+  public getConfig(): Config {
+    return this.config;
+  }
+
   // Attach to existing Express app (EPISTERY pattern)
   public async attach(app: express.Application): Promise<void> {
     console.log('🔗 Attaching SKS Rootz Platform to existing app...');
