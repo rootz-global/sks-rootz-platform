@@ -249,11 +249,17 @@ export class GraphEmailMonitorService {
       console.log('🔍 Testing Microsoft Graph connection...');
       
       const userPrincipalName = this.config.email?.microsoftGraph?.userPrincipalName;
-      console.log(`📧 Testing connection for user: ${userPrincipalName}`);
+      console.log(`📧 Testing mail access for user: ${userPrincipalName}`);
       
-      const user = await this.graphClient.api(`/users/${userPrincipalName}`).get();
+      // Test mail access directly instead of user profile
+      const messages = await this.graphClient
+        .api(`/users/${userPrincipalName}/messages`)
+        .select('id,subject')
+        .top(1)
+        .get();
       
-      console.log(`✅ Connected to Microsoft Graph for user: ${user.displayName} (${user.mail})`);
+      console.log(`✅ Successfully connected to Microsoft Graph mail API`);
+      console.log(`📧 Found ${messages.value?.length || 0} messages in mailbox`);
     } catch (error) {
       console.error('❌ Microsoft Graph connection test failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Connection test failed';
