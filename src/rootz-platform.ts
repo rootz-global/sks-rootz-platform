@@ -6,6 +6,7 @@ import { Config } from './core/configuration/Config';
 import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
+import testRoutes from './routes/testRoutes';
 
 // CORS middleware function
 function enableCORS(req: Request, res: Response, next: NextFunction): void {
@@ -133,6 +134,12 @@ export class RootzPlatform {
     } catch (error) {
       console.error('❌ Failed to initialize Email Processing routes:', error);
     }
+
+    // TEST ROUTES - DATA_WALLET Creation Testing
+    console.log('🧪 Initializing Test routes...');
+    router.use('/test', testRoutes);
+    console.log('✅ Test routes initialized');
+    console.log('   Available at: /.rootz/test/*');
 
     // Client library serving (EPISTERY pattern)
     router.get('/lib/client.js', (req: Request, res: Response) => {
