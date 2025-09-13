@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import EmailProcessingController from '../controllers/EmailProcessingController';
-import { Config } from '@core/configuration';
+import { Config } from '../core/configuration';
 
 export function createEmailProcessingRoutes(config: Config): Router {
   const router = Router();

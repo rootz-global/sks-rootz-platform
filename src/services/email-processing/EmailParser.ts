@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { ParsedMail, parseString as parseEmail, Attachment } from 'mailparser';
+import { simpleParser, ParsedMail, Attachment } from 'mailparser';
 
 export interface ParsedEmailData {
   messageId: string;
@@ -45,21 +45,13 @@ export class EmailParser {
    * Parse raw email content into structured data
    */
   async parseEmail(rawEmail: string): Promise<ParsedEmailData> {
-    return new Promise((resolve, reject) => {
-      parseEmail(rawEmail, (err, parsed) => {
-        if (err) {
-          reject(new Error(`Email parsing failed: ${err.message}`));
-          return;
-        }
-        
-        try {
-          const processedEmail = this.processEmailData(parsed, rawEmail);
-          resolve(processedEmail);
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
+    try {
+      const parsed = await simpleParser(rawEmail);
+      const processedEmail = this.processEmailData(parsed, rawEmail);
+      return processedEmail;
+    } catch (error: any) {
+      throw new Error(`Email parsing failed: ${error?.message || 'Unknown error'}`);
+    }
   }
   
   /**
@@ -125,11 +117,23 @@ export class EmailParser {
   private extractToAddresses(parsed: ParsedMail): string[] {
     const addresses: string[] = [];
     
-    if (parsed.to?.value) {
-      addresses.push(...parsed.to.value.map(addr => addr.address || addr.name || 'unknown'));
+    // Handle both single AddressObject and array formats
+    if (parsed.to) {
+      const toAddresses = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+      for (const toAddr of toAddresses) {
+        if (toAddr.value) {
+          addresses.push(...toAddr.value.map(addr => addr.address || addr.name || 'unknown'));
+        }
+      }
     }
-    if (parsed.cc?.value) {
-      addresses.push(...parsed.cc.value.map(addr => addr.address || addr.name || 'unknown'));
+    
+    if (parsed.cc) {
+      const ccAddresses = Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc];
+      for (const ccAddr of ccAddresses) {
+        if (ccAddr.value) {
+          addresses.push(...ccAddr.value.map(addr => addr.address || addr.name || 'unknown'));
+        }
+      }
     }
     
     return addresses.length > 0 ? addresses : ['unknown@unknown.com'];

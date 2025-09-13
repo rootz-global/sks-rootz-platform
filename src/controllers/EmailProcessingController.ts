@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import EmailParser, { ParsedEmailData } from '../services/email-processing/EmailParser';
 import LocalIPFSService from '../services/ipfs/LocalIPFSService';
 import AuthorizationService from '../services/authorization/AuthorizationService';
-import { Config } from '@core/configuration';
+import { Config } from '../core/configuration';
 
 export interface EmailProcessingRequest {
   userAddress: string;
@@ -49,7 +49,7 @@ export class EmailProcessingController {
       
       console.log('✅ Email Processing Controller ready');
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to initialize email processing controller:', error);
       throw error;
     }
@@ -84,11 +84,11 @@ export class EmailProcessingController {
         res.status(500).json(result);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Email processing error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Email processing failed'
+        error: error?.message || 'Email processing failed'
       });
     }
   }
@@ -96,7 +96,7 @@ export class EmailProcessingController {
   /**
    * Internal email processing workflow
    */
-  private async processEmailInternal(
+  async processEmailInternal(
     userAddress: string,
     rawEmail: string,
     notifyUser: boolean
@@ -164,11 +164,11 @@ export class EmailProcessingController {
         authorizationUrl: authUrl
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Email processing workflow failed:', error);
       return {
         success: false,
-        error: error.message || 'Processing workflow failed'
+        error: error?.message || 'Processing workflow failed'
       };
     }
   }
@@ -217,11 +217,11 @@ export class EmailProcessingController {
         userAddress: authRequest.userAddress
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Authorization processing error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Authorization processing failed'
+        error: error?.message || 'Authorization processing failed'
       });
     }
   }
@@ -263,11 +263,11 @@ export class EmailProcessingController {
         res.status(500).json(result);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Wallet creation completion error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Wallet creation failed'
+        error: error?.message || 'Wallet creation failed'
       });
     }
   }
@@ -295,11 +295,11 @@ export class EmailProcessingController {
         request: authRequest
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Status check error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Status check failed'
+        error: error?.message || 'Status check failed'
       });
     }
   }
@@ -346,11 +346,11 @@ export class EmailProcessingController {
         summary
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Email parsing test error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Email parsing test failed'
+        error: error?.message || 'Email parsing test failed'
       });
     }
   }
@@ -375,10 +375,10 @@ export class EmailProcessingController {
         }
       });
       
-    } catch (error) {
+    } catch (error: any) {
       res.status(503).json({
         healthy: false,
-        error: error.message || 'Health check failed'
+        error: error?.message || 'Health check failed'
       });
     }
   }

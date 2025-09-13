@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { Config } from '@core/configuration';
+import { Config } from '../../core/configuration';
 import { ParsedEmailData } from '../email-processing/EmailParser';
 
 export interface AuthorizationRequest {
@@ -30,7 +30,7 @@ export interface ProcessingResult {
 }
 
 export class AuthorizationService {
-  private provider: ethers.Provider;
+  private provider: ethers.providers.JsonRpcProvider;
   private serviceWallet: ethers.Wallet;
   private authContract: ethers.Contract;
   private config: Config;
@@ -57,8 +57,8 @@ export class AuthorizationService {
         throw new Error('CONTRACT_AUTHORIZATION not configured');
       }
       
-      // Initialize provider and wallet
-      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      // Initialize provider and wallet (ethers v5 syntax)
+      this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
       // Initialize contract (simplified ABI for now)
@@ -99,11 +99,11 @@ export class AuthorizationService {
       const authToken = this.generateAuthToken(userAddress, emailData);
       
       // Prepare email hash (ensure it's bytes32 format)
-      const emailHash = ethers.keccak256(ethers.toUtf8Bytes(emailData.emailHash));
+      const emailHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHash));
       
       // Prepare attachment hashes
       const attachmentHashes = emailData.attachments.map(att => 
-        ethers.keccak256(ethers.toUtf8Bytes(att.contentHash))
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(att.contentHash))
       );
       
       console.log(`   Email Hash: ${emailHash}`);
@@ -117,7 +117,7 @@ export class AuthorizationService {
         attachmentHashes,
         {
           gasLimit: 500000, // Set explicit gas limit
-          gasPrice: ethers.parseUnits('30', 'gwei') // Set gas price
+          gasPrice: ethers.utils.parseUnits('30', 'gwei') // Set gas price
         }
       );
       
@@ -144,11 +144,11 @@ export class AuthorizationService {
         authToken
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to create authorization request:', error);
       return {
         success: false,
-        error: error.message || 'Failed to create authorization request'
+        error: error?.message || 'Failed to create authorization request'
       };
     }
   }
@@ -158,7 +158,7 @@ export class AuthorizationService {
    */
   async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
     try {
-      const requestBytes = ethers.keccak256(ethers.toUtf8Bytes(requestId));
+      const requestBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(requestId));
       const result = await this.authContract.getAuthorizationRequest(requestBytes);
       
       return {
@@ -170,7 +170,7 @@ export class AuthorizationService {
         creditCost: Number(result.creditCost),
         createdAt: new Date(Number(result.createdAt) * 1000),
         expiresAt: new Date(Number(result.expiresAt) * 1000),
-        status: this.mapContractStatus(result.status)
+        status: this.mapContractStatus(result.status) as AuthorizationRequest['status']
       };
       
     } catch (error) {
@@ -192,7 +192,7 @@ export class AuthorizationService {
       console.log('🔄 Processing authorized request...');
       console.log(`   Request ID: ${requestId}`);
       
-      const requestBytes = ethers.keccak256(ethers.toUtf8Bytes(requestId));
+      const requestBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(requestId));
       
       // Prepare email data for contract
       const contractEmailData = {
@@ -200,9 +200,9 @@ export class AuthorizationService {
         originalSender: emailData.from,
         messageId: emailData.messageId,
         subject: emailData.subject,
-        bodyHash: ethers.keccak256(ethers.toUtf8Bytes(emailData.bodyHash)),
-        emailHash: ethers.keccak256(ethers.toUtf8Bytes(emailData.emailHash)),
-        emailHeadersHash: ethers.keccak256(ethers.toUtf8Bytes(emailData.emailHeadersHash)),
+        bodyHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.bodyHash)),
+        emailHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHash)),
+        emailHeadersHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHeadersHash)),
         attachmentCount: emailData.attachments.length,
         ipfsHash: ipfsHash,
         authResults: {
@@ -220,7 +220,7 @@ export class AuthorizationService {
         mimeType: att.contentType,
         fileExtension: this.getFileExtension(att.filename),
         fileSize: att.size,
-        contentHash: ethers.keccak256(ethers.toUtf8Bytes(att.contentHash)),
+        contentHash: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(att.contentHash)),
         fileSignature: '', // Could be computed if needed
         ipfsHash: '', // Would be set if attachment uploaded separately
         attachmentIndex: index,
@@ -238,7 +238,7 @@ export class AuthorizationService {
         contractAttachmentData,
         {
           gasLimit: 1000000, // Higher limit for wallet creation
-          gasPrice: ethers.parseUnits('30', 'gwei')
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
         }
       );
       
@@ -252,11 +252,11 @@ export class AuthorizationService {
       
       return result;
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to process authorized request:', error);
       return {
         success: false,
-        error: error.message || 'Processing failed'
+        error: error?.message || 'Processing failed'
       };
     }
   }
@@ -267,13 +267,13 @@ export class AuthorizationService {
   private generateAuthToken(userAddress: string, emailData: ParsedEmailData): string {
     const timestamp = Date.now();
     const data = `${userAddress}-${emailData.messageId}-${timestamp}`;
-    return ethers.keccak256(ethers.toUtf8Bytes(data)).substring(0, 18); // Shorter for readability
+    return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(data)).substring(0, 18); // Shorter for readability
   }
   
   /**
    * Extract request ID from transaction receipt
    */
-  private async extractRequestIdFromReceipt(receipt: ethers.TransactionReceipt): Promise<string | null> {
+  private async extractRequestIdFromReceipt(receipt: ethers.providers.TransactionReceipt): Promise<string | null> {
     try {
       // Look for AuthorizationRequestCreated event
       for (const log of receipt.logs) {
@@ -297,7 +297,7 @@ export class AuthorizationService {
   /**
    * Extract processing result from transaction receipt
    */
-  private async extractProcessingResult(receipt: ethers.TransactionReceipt): Promise<ProcessingResult> {
+  private async extractProcessingResult(receipt: ethers.providers.TransactionReceipt): Promise<ProcessingResult> {
     try {
       // Look for EmailWalletProcessed event
       for (const log of receipt.logs) {
@@ -329,7 +329,7 @@ export class AuthorizationService {
    * Map contract status enum to string
    */
   private mapContractStatus(status: number): string {
-    const statusMap = {
+    const statusMap: { [key: number]: string } = {
       0: 'pending',
       1: 'authorized', 
       2: 'processed',
@@ -353,7 +353,7 @@ export class AuthorizationService {
   async checkServiceWalletBalance(): Promise<{ balance: string; sufficient: boolean }> {
     try {
       const balance = await this.provider.getBalance(this.serviceWallet.address);
-      const balanceInEth = ethers.formatEther(balance);
+      const balanceInEth = ethers.utils.formatEther(balance);
       const sufficient = parseFloat(balanceInEth) > 0.01; // Need at least 0.01 POL
       
       return {
@@ -380,15 +380,15 @@ export class AuthorizationService {
           serviceWallet: this.serviceWallet.address,
           balance: balance.balance,
           blockNumber,
-          contractAddress: await this.authContract.getAddress(),
+          contractAddress: this.authContract.address,
           networkConnected: true
         }
       };
       
-    } catch (error) {
+    } catch (error: any) {
       return {
         healthy: false,
-        details: { error: error.message }
+        details: { error: error?.message || 'Unknown error' }
       };
     }
   }

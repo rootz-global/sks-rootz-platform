@@ -1,5 +1,5 @@
 import { create as createIPFS, IPFSHTTPClient } from 'ipfs-http-client';
-import { Config } from '@core/configuration';
+import { Config } from '../../core/configuration';
 
 export interface IPFSUploadResult {
   success: boolean;
@@ -79,10 +79,10 @@ export class LocalIPFSService {
       
       this.isConnected = true;
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to connect to local IPFS node:', error);
       this.isConnected = false;
-      throw new Error(`IPFS connection failed: ${error.message}`);
+      throw new Error(`IPFS connection failed: ${error?.message || 'Unknown error'}`);
     }
   }
   
@@ -176,11 +176,11 @@ export class LocalIPFSService {
         size: result.size
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ IPFS upload failed:', error);
       return {
         success: false,
-        error: error.message || 'Upload failed'
+        error: error?.message || 'Upload failed'
       };
     }
   }
@@ -215,7 +215,7 @@ export class LocalIPFSService {
         
         console.log(`   ✅ ${attachment.filename} → ${attachmentHash}`);
         
-      } catch (error) {
+      } catch (error: any) {
         console.error(`   ❌ Failed to upload ${attachment.filename}:`, error);
         
         // Add placeholder for failed upload
@@ -225,7 +225,7 @@ export class LocalIPFSService {
           size: attachment.size,
           contentHash: attachment.contentHash,
           ipfsHash: 'upload-failed',
-          error: error.message
+          error: error?.message || 'Upload failed'
         });
       }
     }
@@ -262,11 +262,11 @@ export class LocalIPFSService {
         size: content.length
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ IPFS retrieval failed:', error);
       return {
         success: false,
-        error: error.message || 'Retrieval failed'
+        error: error?.message || 'Retrieval failed'
       };
     }
   }
@@ -369,10 +369,10 @@ export class LocalIPFSService {
         }
       };
       
-    } catch (error) {
+    } catch (error: any) {
       return {
         healthy: false,
-        details: { error: error.message }
+        details: { error: error?.message || 'Unknown error' }
       };
     }
   }
