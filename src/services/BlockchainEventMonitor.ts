@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { Config } from '../core/Config';
+import { Config } from '../core/configuration/Config';
 
 export interface AuthorizationEvent {
   requestId: string;

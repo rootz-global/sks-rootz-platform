@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { Config } from '../core/Config';
+import { Config } from '../core/configuration/Config';
 import { BlockchainEventMonitor, AuthorizationEvent } from './BlockchainEventMonitor';
 
 export interface MintingResult {
