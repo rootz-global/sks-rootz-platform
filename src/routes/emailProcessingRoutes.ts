@@ -19,6 +19,12 @@ export function createEmailProcessingRoutes(config: Config): Router {
   router.get('/authorization-requests/:requestId', (req, res) => controller.getAuthorizationRequest(req, res));
   
   /**
+   * Handle blockchain authorization completion notification
+   * POST /.rootz/email-processing/authorization-complete
+   */
+  router.post('/authorization-complete', (req, res) => controller.handleAuthorizationComplete(req, res));
+  
+  /**
    * Process user authorization
    * POST /.rootz/email-processing/authorize
    */

@@ -8,6 +8,8 @@ import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 import testRoutes from './routes/testRoutes';
 import EmailMonitoringController from './controllers/EmailMonitoringController';
+import { DataWalletMintingService } from './services/DataWalletMintingService';
+import { BlockchainEventMonitor } from './services/BlockchainEventMonitor';
 
 // CORS middleware function
 function enableCORS(req: Request, res: Response, next: NextFunction): void {
@@ -28,6 +30,7 @@ export class RootzPlatform {
   private static instance: RootzPlatform;
   private config: Config;
   private isInitialized = false;
+  private mintingService?: DataWalletMintingService;
 
   private constructor() {
     this.config = new Config();
@@ -51,12 +54,38 @@ export class RootzPlatform {
     this.config.loadDomain(domain);
     console.log(`✅ Loaded configuration for domain: ${domain}`);
     
+    // Initialize DATA_WALLET Minting Service
+    try {
+      console.log('🏭 Starting DATA_WALLET Minting Service...');
+      this.mintingService = new DataWalletMintingService(this.config);
+      await this.mintingService.start();
+      console.log('✅ DATA_WALLET Minting Service started successfully');
+    } catch (error) {
+      console.error('❌ Failed to start DATA_WALLET Minting Service:', error);
+      console.error('⚠️  Platform will continue without automatic minting');
+    }
+    
     this.isInitialized = true;
     console.log('✅ Platform initialization complete');
   }
 
   public getConfig(): Config {
     return this.config;
+  }
+
+  public getMintingService(): DataWalletMintingService | undefined {
+    return this.mintingService;
+  }
+
+  public async shutdown(): Promise<void> {
+    console.log('Shutting down SKS Rootz Platform...');
+    
+    if (this.mintingService) {
+      this.mintingService.stop();
+      console.log('DATA_WALLET Minting Service stopped');
+    }
+    
+    console.log('Platform shutdown complete');
   }
 
   // Attach to existing Express app (EPISTERY pattern)
@@ -104,6 +133,23 @@ export class RootzPlatform {
     // Health check endpoint
     router.get('/health', (req: Request, res: Response) => {
       res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+    });
+    
+    // Minting service status endpoint
+    router.get('/minting-status', (req: Request, res: Response) => {
+      if (this.mintingService) {
+        res.json({
+          success: true,
+          mintingService: this.mintingService.getStatus(),
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.json({
+          success: false,
+          message: 'DATA_WALLET Minting Service not initialized',
+          timestamp: new Date().toISOString()
+        });
+      }
     });
     
     // Email Wallet routes

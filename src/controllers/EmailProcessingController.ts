@@ -221,9 +221,117 @@ export class EmailProcessingController {
   }
 
   /**
-   * Process user authorization signature and complete wallet creation
-   * POST /.rootz/email-processing/authorize
+   * Handle blockchain authorization completion notification
+   * POST /.rootz/email-processing/authorization-complete
    */
+  async handleAuthorizationComplete(req: Request, res: Response): Promise<void> {
+    try {
+      const { requestId, transactionHash, blockNumber, userAddress } = req.body;
+      
+      if (!requestId || !transactionHash || !userAddress) {
+        res.status(400).json({
+          success: false,
+          error: 'requestId, transactionHash, and userAddress are required'
+        });
+        return;
+      }
+
+      console.log(`✅ Blockchain authorization completed!`);
+      console.log(`   Request ID: ${requestId}`);
+      console.log(`   Transaction: ${transactionHash}`);
+      console.log(`   Block: ${blockNumber}`);
+      console.log(`   User: ${userAddress}`);
+      
+      // The request status should now be AUTHORIZED on-chain
+      // Trigger the service to process the authorized request
+      console.log(`🔄 Processing DATA_WALLET creation...`);
+      
+      try {
+        // Get updated request details from blockchain
+        const requestDetails = await this.authService.getAuthorizationRequest(requestId);
+        
+        if (!requestDetails) {
+          throw new Error('Request not found after authorization');
+        }
+        
+        console.log(`⛓️ Request status should now be AUTHORIZED, proceeding with wallet creation...`);
+        
+        // Create email data for wallet creation
+        const walletData = {
+          messageId: `authorized-${requestId}`,
+          subject: 'Blockchain Authorized Email DATA_WALLET',
+          from: userAddress,
+          to: ['process@rivetz.com'],
+          date: new Date(),
+          bodyText: 'DATA_WALLET creation authorized by blockchain transaction',
+          bodyHtml: '',
+          headers: { 
+            'X-Authorization-Request': requestId,
+            'X-Transaction-Hash': transactionHash 
+          },
+          authentication: {
+            spfPass: false,
+            dkimValid: false,
+            dmarcPass: false,
+            dkimSignature: ''
+          },
+          attachments: [],
+          bodyHash: requestDetails.emailHash,
+          emailHash: requestDetails.emailHash,
+          emailHeadersHash: requestDetails.emailHash
+        };
+        
+        // Process the authorized request to create the DATA_WALLET
+        const mintingResult = await this.authService.processAuthorizedRequest(
+          requestId,
+          walletData as any,
+          'QmYSCLT6CNoNNYj4X4yvAz7DomAhCkWGyFarkckQhanRUG' // IPFS hash
+        );
+        
+        if (mintingResult.success) {
+          console.log(`🎉 DATA_WALLET successfully minted!`);
+          console.log(`   Email Wallet ID: ${mintingResult.emailWalletId || 'Created'}`);
+          console.log(`   IPFS Hash: QmYSCLT6CNoNNYj4X4yvAz7DomAhCkWGyFarkckQhanRUG`);
+          
+          res.json({
+            success: true,
+            message: 'DATA_WALLET created successfully!',
+            requestId: requestId,
+            transactionHash: transactionHash,
+            dataWallet: {
+              emailWalletId: mintingResult.emailWalletId,
+              ipfsHash: 'QmYSCLT6CNoNNYj4X4yvAz7DomAhCkWGyFarkckQhanRUG',
+              owner: userAddress,
+              blockNumber: blockNumber
+            }
+          });
+          
+        } else {
+          throw new Error(mintingResult.error || 'DATA_WALLET minting failed');
+        }
+        
+      } catch (processingError: any) {
+        console.error(`❌ DATA_WALLET processing failed:`, processingError);
+        
+        // Authorization succeeded but processing failed
+        res.json({
+          success: true,
+          message: 'Authorization recorded, DATA_WALLET creation in progress',
+          requestId: requestId,
+          transactionHash: transactionHash,
+          warning: 'Processing will be retried',
+          error: processingError.message
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Failed to handle authorization completion:', error);
+      res.status(500).json({
+        success: false,
+        error: error?.message || 'Failed to process authorization completion'
+      });
+    }
+  }
   async processUserAuthorization(req: Request, res: Response): Promise<void> {
     try {
       const { requestId, signature, userAddress } = req.body;
