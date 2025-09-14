@@ -1,0 +1,15 @@
+{
+  "network": "unknown",
+  "chainId": 80002,
+  "contractName": "EmailDataWalletOS_Secure",
+  "contractAddress": "0x0eb8830FaC353A63E912861137b246CAC7FC5977",
+  "transactionHash": "0x3219ab33c788162d36cc8006abe0a8efd1d63fb7709eea8770320db2418ba96a",
+  "blockNumber": 26415864,
+  "deployer": "0xE2d0E252E7da22901bd1ffDD012Da2c77aC3033a",
+  "gasUsed": "1886426",
+  "gasPrice": "93120000001",
+  "cost": "0.175663989121886426",
+  "timestamp": "2025-09-14T22:34:15.042Z",
+  "ethersVersion": "5.7.2",
+  "note": "Deployed using ethers v5 for Polygon compatibility"
+}
