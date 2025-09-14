@@ -41,11 +41,14 @@ export class DataWalletMintingService {
   private pendingMints: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(private config: Config) {
-    const blockchainConfig = this.config.getBlockchainConfig();
-    
     // Initialize provider and service wallet
-    this.provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpcUrl);
-    this.serviceWallet = new ethers.Wallet(blockchainConfig.serviceWalletPrivateKey, this.provider);
+    this.provider = new ethers.providers.JsonRpcProvider(
+      this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/')
+    );
+    this.serviceWallet = new ethers.Wallet(
+      this.config.get('blockchain.serviceWalletPrivateKey', ''),
+      this.provider
+    );
     
     // Initialize authorization contract
     const authContractABI = [
@@ -54,7 +57,7 @@ export class DataWalletMintingService {
     ];
     
     this.authContract = new ethers.Contract(
-      blockchainConfig.contractAuthorization,
+      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573'),
       authContractABI,
       this.serviceWallet // Connected with service wallet for transactions
     );

@@ -16,8 +16,9 @@ export class BlockchainEventMonitor {
   private eventHandlers: Map<string, (event: AuthorizationEvent) => Promise<void>> = new Map();
 
   constructor(private config: Config) {
-    const blockchainConfig = this.config.getBlockchainConfig();
-    this.provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpcUrl);
+    this.provider = new ethers.providers.JsonRpcProvider(
+      this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/')
+    );
     
     // Initialize authorization contract for event monitoring
     const authContractABI = [
@@ -26,7 +27,7 @@ export class BlockchainEventMonitor {
     ];
     
     this.authContract = new ethers.Contract(
-      blockchainConfig.contractAuthorization,
+      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573'),
       authContractABI,
       this.provider
     );
