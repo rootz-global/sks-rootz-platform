@@ -27,7 +27,7 @@ export class BlockchainEventMonitor {
     ];
     
     this.authContract = new ethers.Contract(
-      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573'),
+      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573') as string,
       authContractABI,
       this.provider
     );

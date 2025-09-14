@@ -43,12 +43,15 @@ export class DataWalletMintingService {
   constructor(private config: Config) {
     // Initialize provider and service wallet
     this.provider = new ethers.providers.JsonRpcProvider(
-      this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/')
+      this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/') as string
     );
-    this.serviceWallet = new ethers.Wallet(
-      this.config.get('blockchain.serviceWalletPrivateKey', ''),
-      this.provider
-    );
+    
+    const privateKey = this.config.get('blockchain.serviceWalletPrivateKey', '');
+    if (!privateKey) {
+      throw new Error('Service wallet private key not configured');
+    }
+    
+    this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
     
     // Initialize authorization contract
     const authContractABI = [
@@ -57,7 +60,7 @@ export class DataWalletMintingService {
     ];
     
     this.authContract = new ethers.Contract(
-      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573'),
+      this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d33bA741069cC2CEEA219573') as string,
       authContractABI,
       this.serviceWallet // Connected with service wallet for transactions
     );
