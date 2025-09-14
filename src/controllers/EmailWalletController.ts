@@ -380,23 +380,45 @@ export class EmailWalletController extends Controller {
     }
   }
 
-  // Test blockchain write capability
+  // Test blockchain write capability - ENHANCED FOR NEW CONTRACT
   public async testBlockchainWrite(req: Request, res: Response): Promise<void> {
     try {
-      console.log(`[TEST] Starting blockchain write test`);
+      console.log(`[TEST] Starting enhanced blockchain write test`);
       
       this.initializeServices(req);
       
       // Test basic write capability
-      const success = await this.blockchainService.testBlockchainWrite();
+      const basicWriteSuccess = await this.blockchainService.testBlockchainWrite();
+      console.log(`[TEST] Basic blockchain write test: ${basicWriteSuccess}`);
+      
+      // Test new enhanced contract functions
+      let enhancedContractTest = false;
+      try {
+        // Test getting user email wallets (should work even if user has 0 wallets)
+        const testUserAddress = '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b';
+        const userWallets = await this.blockchainService.getUserEmailWallets(testUserAddress);
+        const activeWalletCount = await this.blockchainService.getActiveWalletCount(testUserAddress);
+        
+        console.log(`[TEST] Enhanced contract test - User wallets: ${userWallets.length}, Active: ${activeWalletCount}`);
+        enhancedContractTest = true;
+      } catch (enhancedError) {
+        console.error(`[TEST] Enhanced contract test failed:`, enhancedError);
+        enhancedContractTest = false;
+      }
+      
+      const overallSuccess = basicWriteSuccess && enhancedContractTest;
       
       const result = {
-        blockchainWriteTest: success,
+        blockchainWriteTest: overallSuccess,
+        basicWrite: basicWriteSuccess,
+        enhancedContract: enhancedContractTest,
         timestamp: new Date().toISOString(),
-        message: success ? 'Blockchain write capability confirmed' : 'Blockchain write test failed'
+        message: overallSuccess 
+          ? 'Enhanced blockchain integration working correctly' 
+          : 'Blockchain integration test failed - check logs for details'
       };
       
-      console.log(`[TEST] Blockchain write test result: ${success}`);
+      console.log(`[TEST] Overall blockchain test result: ${overallSuccess}`);
       this.sendResponse(res, result);
       
     } catch (error) {
