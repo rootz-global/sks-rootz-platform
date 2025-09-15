@@ -145,7 +145,7 @@ export class BlockchainService {
             }
             
             // Check if already registered
-            const isRegistered = await this.unifiedContract.isRegistered(validAddress);
+            const isRegistered = await this.registrationContract.isRegistered(validAddress);
             if (isRegistered) {
                 throw new Error('User already registered');
             }
@@ -153,9 +153,13 @@ export class BlockchainService {
             // Register user with initial credit deposit
             const creditDeposit = ethers.utils.parseEther('0.006'); // 60 credits worth
             
-            const tx = await this.unifiedContract.registerUser(
-                validAddress,
+            const tx = await this.registrationContract.registerEmailWallet(
                 email,
+                [], // additional emails
+                ethers.constants.AddressZero, // parent corporate wallet
+                [], // authorization txs
+                [], // whitelisted domains
+                false, // auto process CC
                 {
                     value: creditDeposit,
                     gasLimit: 300000,
@@ -210,27 +214,28 @@ export class BlockchainService {
             const validAddress = ethers.utils.getAddress(userAddress);
             
             // Verify user is registered
-            const isRegistered = await this.unifiedContract.isRegistered(validAddress);
+            const isRegistered = await this.registrationContract.isRegistered(validAddress);
             if (!isRegistered) {
                 throw new Error('User not registered');
             }
 
             // Check credit balance
-            const credits = await this.unifiedContract.getCreditBalance(validAddress);
+            const credits = await this.registrationContract.getCreditBalance(validAddress);
             const requiredCredits = 4; // Email wallet cost
             
             if (credits.lt(requiredCredits)) {
                 throw new Error(`Insufficient credits: ${credits.toString()} (need ${requiredCredits})`);
             }
 
-            // Create email wallet with authorization (service owner can do this)
-            const tx = await this.unifiedContract.createWalletWithAuthorization(
+            // Create email wallet using email data wallet contract
+            const tx = await this.emailDataWalletContract.createEmailDataWallet(
                 validAddress,
-                email,
-                subject,
-                sender,
-                contentHash,
-                ipfsHash,
+                email, // emailHash
+                subject, // subjectHash  
+                contentHash, // contentHash
+                sender, // senderHash
+                [], // attachmentHashes
+                ipfsHash, // metadata
                 {
                     gasLimit: 500000,
                     gasPrice: await this.getOptimalGasPrice()
@@ -355,7 +360,7 @@ export class BlockchainService {
             const validAddress = ethers.utils.getAddress(userAddress);
             const depositAmount = ethers.utils.parseEther(amount);
             
-            const tx = await this.unifiedContract.depositCredits(
+            const tx = await this.registrationContract.depositCredits(
                 validAddress,
                 {
                     value: depositAmount,
