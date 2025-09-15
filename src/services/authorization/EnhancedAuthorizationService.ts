@@ -290,10 +290,10 @@ export class EnhancedAuthorizationService {
       
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
         userAddress,
-        request.emailData.emailHash,
-        request.emailData.subject,
-        contentHash,
-        request.emailData.from,
+        request.emailData.emailHash || '',
+        request.emailData.subject || '',
+        contentHash.substring(2), // Remove '0x' prefix for contract validation
+        request.emailData.from || '',
         request.attachmentHashes || [],
         JSON.stringify({ ipfsHash: request.ipfsHash, requestId }),
         {
