@@ -1,6 +1,6 @@
 // src/services/RegistrationLookupService.ts
 import { ethers } from 'ethers';
-import { Config } from '../core/Config';
+import { Config } from '../core/configuration/Config';
 
 export class RegistrationLookupService {
     private provider: ethers.providers.JsonRpcProvider;
