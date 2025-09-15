@@ -24,7 +24,9 @@ export interface AuthorizationResult {
   requestId?: string;
   authToken?: string;
   emailWalletId?: string;
+  attachmentWalletIds?: string[];
   authorizationTx?: string;
+  totalCreditsUsed?: number;
   error?: string;
 }
 
@@ -299,7 +301,9 @@ export class EnhancedAuthorizationService {
         success: true,
         requestId,
         emailWalletId: walletId || undefined,
-        authorizationTx: createTx.hash
+        attachmentWalletIds: [], // Enhanced contract handles email + attachments in one wallet
+        authorizationTx: createTx.hash,
+        totalCreditsUsed: request.creditCost
       };
       
     } catch (error: any) {
@@ -498,7 +502,9 @@ export class EnhancedAuthorizationService {
         success: true,
         requestId,
         emailWalletId: walletId || undefined,
-        authorizationTx: createTx.hash
+        attachmentWalletIds: [], // Enhanced contract handles email + attachments in one wallet
+        authorizationTx: createTx.hash,
+        totalCreditsUsed: request.creditCost
       };
       
     } catch (error: any) {
