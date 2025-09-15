@@ -40,19 +40,26 @@ export interface AuthorizationResult {
  * 4. Bypasses complex old authorization flow entirely
  */
 export class EnhancedAuthorizationService {
+  private static instance: EnhancedAuthorizationService | null = null;
   private provider!: ethers.providers.JsonRpcProvider;
   private serviceWallet!: ethers.Wallet;
   private emailDataWalletContract!: ethers.Contract;
   private registrationContract!: ethers.Contract;
   private config: Config;
   
-  // In-memory storage for authorization requests (replace with database in production)
-  private authorizationRequests: Map<string, AuthorizationRequest> = new Map();
-  private tokenToRequestId: Map<string, string> = new Map();
+  // SHARED in-memory storage for authorization requests (replace with database in production)
+  private static authorizationRequests: Map<string, AuthorizationRequest> = new Map();
+  private static tokenToRequestId: Map<string, string> = new Map();
   
   constructor(config: Config) {
+    // Singleton pattern - return existing instance if available
+    if (EnhancedAuthorizationService.instance) {
+      return EnhancedAuthorizationService.instance;
+    }
+    
     this.config = config;
     this.initializeBlockchain();
+    EnhancedAuthorizationService.instance = this;
   }
   
   /**
@@ -179,9 +186,9 @@ export class EnhancedAuthorizationService {
         emailData
       };
       
-      // Store in memory (would be database in production)
-      this.authorizationRequests.set(requestId, authRequest);
-      this.tokenToRequestId.set(authToken, requestId);
+      // Store in SHARED memory (would be database in production)
+      EnhancedAuthorizationService.authorizationRequests.set(requestId, authRequest);
+      EnhancedAuthorizationService.tokenToRequestId.set(authToken, requestId);
       
       console.log(`✅ Enhanced authorization request created:`);
       console.log(`   Request ID: ${requestId}`);
@@ -217,8 +224,8 @@ export class EnhancedAuthorizationService {
       console.log(`   Request ID: ${requestId}`);
       console.log(`   User Address: ${userAddress}`);
       
-      // Get authorization request
-      const request = this.authorizationRequests.get(requestId);
+      // Get authorization request from SHARED memory
+      const request = EnhancedAuthorizationService.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Authorization request not found');
       }
@@ -319,14 +326,14 @@ export class EnhancedAuthorizationService {
    * Get authorization request details
    */
   async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
-    return this.authorizationRequests.get(requestId) || null;
+    return EnhancedAuthorizationService.authorizationRequests.get(requestId) || null;
   }
   
   /**
    * Get authorization request by auth token
    */
   async getAuthorizationRequestByToken(authToken: string): Promise<AuthorizationRequest | null> {
-    const requestId = this.tokenToRequestId.get(authToken);
+    const requestId = EnhancedAuthorizationService.tokenToRequestId.get(authToken);
     if (!requestId) {
       return null;
     }
@@ -375,7 +382,7 @@ export class EnhancedAuthorizationService {
    */
   async cancelRequest(requestId: string): Promise<AuthorizationResult> {
     try {
-      const request = this.authorizationRequests.get(requestId);
+      const request = EnhancedAuthorizationService.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Request not found');
       }
@@ -427,7 +434,7 @@ export class EnhancedAuthorizationService {
    */
   async isRequestValid(requestId: string): Promise<boolean> {
     try {
-      const request = this.authorizationRequests.get(requestId);
+      const request = EnhancedAuthorizationService.authorizationRequests.get(requestId);
       if (!request) return false;
       
       if (request.status !== 'pending') return false;
@@ -447,7 +454,7 @@ export class EnhancedAuthorizationService {
     try {
       const userRequests: string[] = [];
       
-      for (const [requestId, request] of this.authorizationRequests.entries()) {
+      for (const [requestId, request] of EnhancedAuthorizationService.authorizationRequests.entries()) {
         if (request.userAddress.toLowerCase() === userAddress.toLowerCase()) {
           userRequests.push(requestId);
         }
@@ -469,7 +476,7 @@ export class EnhancedAuthorizationService {
     ipfsHash: string
   ): Promise<AuthorizationResult> {
     try {
-      const request = this.authorizationRequests.get(requestId);
+      const request = EnhancedAuthorizationService.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Request not found');
       }
@@ -533,7 +540,7 @@ export class EnhancedAuthorizationService {
           blockNumber,
           emailDataWalletContract: this.emailDataWalletContract.address,
           registrationContract: this.registrationContract.address,
-          pendingRequests: this.authorizationRequests.size,
+          pendingRequests: EnhancedAuthorizationService.authorizationRequests.size,
           enhanced: true
         }
       };
