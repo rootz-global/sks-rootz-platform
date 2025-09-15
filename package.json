@@ -60,7 +60,7 @@
     "jsonwebtoken": "9.0.2",
     "mailparser": "^3.6.5",
     "node-fetch": "^3.3.2",
-    "pg": "8.11.0",
+    "pg": "^8.11.0",
     "redis": "4.6.0",
     "winston": "3.10.0"
   },
@@ -80,7 +80,7 @@
     "@types/mocha": "^10.0.1",
     "@types/node": "18.17.0",
     "@types/node-fetch": "^2.6.4",
-    "@types/pg": "8.10.2",
+    "@types/pg": "^8.10.2",
     "chai": "^4.3.7",
     "eslint": "^8.45.0",
     "ethereum-waffle": "^4.0.10",

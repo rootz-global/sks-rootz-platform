@@ -39,7 +39,6 @@
             padding: 20px;
         }
 
-        /* Header */
         header {
             background: var(--light);
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -67,7 +66,6 @@
             text-decoration: none;
         }
 
-        /* Page Header */
         .page-header {
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
             color: var(--light);
@@ -86,7 +84,6 @@
             opacity: 0.9;
         }
 
-        /* Status Grid */
         .status-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -210,7 +207,39 @@
             border: 1px solid rgba(45, 80, 22, 0.1);
         }
 
-        /* Mobile Responsive */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--light);
+        }
+
+        .btn-secondary {
+            background: var(--gray);
+            color: var(--light);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -227,6 +256,11 @@
             .status-grid {
                 grid-template-columns: 1fr;
             }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
         }
     </style>
 </head>
@@ -237,23 +271,25 @@
         </nav>
     </header>
 
-    <!-- Page Header -->
     <div class="page-header">
         <h1>📊 SKS Rootz Dashboard</h1>
         <p>Monitor blockchain integration and email wallet status</p>
     </div>
 
     <div class="container">
-        <!-- Status Overview -->
         <div class="status-grid">
             <div class="status-card">
                 <h3><span class="icon">🔗</span>Blockchain Status</h3>
                 <div class="metric">
                     <span class="metric-label">Connection</span>
                     <span class="metric-value">
-                        <span class="status-indicator status-connected"></span>
-                        <span id="blockchain-status">Connected</span>
+                        <span class="status-indicator" id="blockchain-indicator"></span>
+                        <span id="blockchain-status">Checking...</span>
                     </span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Service Wallet</span>
+                    <span class="metric-value" id="service-wallet">Loading...</span>
                 </div>
                 <div class="metric">
                     <span class="metric-label">Last Updated</span>
@@ -266,7 +302,7 @@
                 <div class="metric">
                     <span class="metric-label">Registration</span>
                     <span class="metric-value">
-                        <span class="status-indicator status-connected"></span>
+                        <span class="status-indicator" id="wallet-indicator"></span>
                         <span id="wallet-status">Checking...</span>
                     </span>
                 </div>
@@ -275,8 +311,8 @@
                     <span class="metric-value" id="wallet-credits">Loading...</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">POL Balance</span>
-                    <span class="metric-value" id="pol-balance">Loading...</span>
+                    <span class="metric-label">Email Wallets</span>
+                    <span class="metric-value" id="email-wallets">Loading...</span>
                 </div>
             </div>
 
@@ -285,28 +321,58 @@
                 <div class="metric">
                     <span class="metric-label">Service Status</span>
                     <span class="metric-value">
-                        <span class="status-indicator status-connected"></span>
-                        <span id="email-status">Active</span>
+                        <span class="status-indicator" id="email-indicator"></span>
+                        <span id="email-status">Checking...</span>
                     </span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Emails Processed</span>
-                    <span class="metric-value" id="emails-processed">0</span>
+                    <span class="metric-label">Graph API</span>
+                    <span class="metric-value" id="graph-status">Loading...</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Monitoring</span>
+                    <span class="metric-value" id="monitoring-status">Loading...</span>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <h3><span class="icon">🔐</span>Authorization Service</h3>
+                <div class="metric">
+                    <span class="metric-label">Service Health</span>
+                    <span class="metric-value">
+                        <span class="status-indicator" id="auth-indicator"></span>
+                        <span id="auth-status">Checking...</span>
+                    </span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Pending Requests</span>
+                    <span class="metric-value" id="pending-requests">Loading...</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Enhanced Mode</span>
+                    <span class="metric-value" id="enhanced-mode">Loading...</span>
                 </div>
             </div>
         </div>
 
-        <!-- Controls -->
-        <div style="text-align: center; margin: 30px 0;">
-            <button class="refresh-btn" onclick="refreshStatus()">
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="refreshStatus()">
                 <span id="refresh-icon">🔄</span> Refresh Status
+            </button>
+            <button class="btn btn-secondary" onclick="testBlockchain()">
+                🧪 Test Blockchain
+            </button>
+            <button class="btn btn-secondary" onclick="startEmailMonitoring()">
+                📧 Start Email Monitoring
             </button>
         </div>
 
-        <!-- Wallet Information -->
         <div class="wallet-info">
             <strong>🔐 Test Wallet Address:</strong>
             <div class="wallet-address" id="wallet-address">0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b</div>
+            <div style="margin-top: 10px;">
+                <small>This is the test wallet used for demonstrations. Connect MetaMask with this address to test the system.</small>
+            </div>
         </div>
     </div>
 
@@ -320,7 +386,6 @@
             console.log('🚀 SKS Rootz Dashboard initializing...');
             console.log('API Base:', API_BASE);
             refreshStatus();
-            updateWalletAddress();
         });
 
         // Refresh all status information
@@ -330,7 +395,10 @@
 
             try {
                 await Promise.all([
-                    updateWalletInfo()
+                    updateBlockchainStatus(),
+                    updateWalletInfo(),
+                    updateEmailStatus(),
+                    updateAuthorizationStatus()
                 ]);
                 console.log('✅ Status refresh complete');
             } catch (error) {
@@ -340,18 +408,182 @@
             }
         }
 
-        // Update wallet information - FIXED API RESPONSE PARSING
+        // Update blockchain status
+        async function updateBlockchainStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/test/blockchain-write`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    setStatus('blockchain', 'connected', 'Connected');
+                    document.getElementById('service-wallet').textContent = 'Active';
+                    document.getElementById('blockchain-timestamp').textContent = new Date(data.timestamp).toLocaleTimeString();
+                } else {
+                    setStatus('blockchain', 'error', 'Failed');
+                }
+            } catch (error) {
+                console.error('❌ Blockchain status error:', error);
+                setStatus('blockchain', 'error', 'Error');
+            }
+        }
+
+        // Update wallet information
         async function updateWalletInfo() {
             try {
-                console.log('🔄 Fetching wallet info for:', WALLET_ADDRESS);
-                
                 const response = await fetch(`${API_BASE}/email-wallet/balance/${WALLET_ADDRESS}`);
+                const data = await response.json();
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('✅ API Response:', data);
+                if (data.success && data.data) {
+                    const walletData = data.data;
                     
-                    // FIXED: Parse the correct response structure
-                    // API returns: { "success": true, "data": { "credits": 110, "isRegistered": true, "address": "..." } }
-                    if (data.success && data.data) {
-                        //
+                    if (walletData.isRegistered) {
+                        setStatus('wallet', 'connected', 'Registered');
+                        document.getElementById('wallet-credits').textContent = `${walletData.credits} credits`;
+                    } else {
+                        setStatus('wallet', 'warning', 'Not Registered');
+                        document.getElementById('wallet-credits').textContent = 'N/A';
+                    }
+                    
+                    // Try to get email wallets count
+                    try {
+                        const walletResponse = await fetch(`${API_BASE}/authorization/user-requests/${WALLET_ADDRESS}`);
+                        const walletResult = await walletResponse.json();
+                        
+                        if (walletResult.success) {
+                            document.getElementById('email-wallets').textContent = `${walletResult.data?.totalCount || 0} wallets`;
+                        } else {
+                            document.getElementById('email-wallets').textContent = '0 wallets';
+                        }
+                    } catch (e) {
+                        document.getElementById('email-wallets').textContent = 'Unknown';
+                    }
+                    
+                } else {
+                    setStatus('wallet', 'error', 'Error');
+                    document.getElementById('wallet-credits').textContent = 'Error';
+                }
+            } catch (error) {
+                console.error('❌ Wallet info error:', error);
+                setStatus('wallet', 'error', 'Error');
+            }
+        }
+
+        // Update email processing status
+        async function updateEmailStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/email-monitoring/status`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const emailData = data.data.emailMonitoring || data.data;
+                    
+                    if (emailData.isRunning) {
+                        setStatus('email', 'connected', 'Active');
+                    } else {
+                        setStatus('email', 'warning', 'Stopped');
+                    }
+                    
+                    document.getElementById('graph-status').textContent = emailData.graphClientAvailable ? 'Connected' : 'Disconnected';
+                    document.getElementById('monitoring-status').textContent = emailData.isRunning ? 'Running' : 'Stopped';
+                } else {
+                    setStatus('email', 'error', 'Error');
+                }
+            } catch (error) {
+                console.error('❌ Email status error:', error);
+                setStatus('email', 'error', 'Error');
+                document.getElementById('graph-status').textContent = 'Error';
+                document.getElementById('monitoring-status').textContent = 'Error';
+            }
+        }
+
+        // Update authorization service status
+        async function updateAuthorizationStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/authorization/health`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const authData = data.data;
+                    
+                    if (authData.healthy) {
+                        setStatus('auth', 'connected', 'Healthy');
+                    } else {
+                        setStatus('auth', 'warning', 'Unhealthy');
+                    }
+                    
+                    document.getElementById('pending-requests').textContent = `${authData.details?.pendingRequests || 0}`;
+                    document.getElementById('enhanced-mode').textContent = authData.details?.enhanced ? 'Enabled' : 'Disabled';
+                } else {
+                    setStatus('auth', 'error', 'Error');
+                }
+            } catch (error) {
+                console.error('❌ Authorization status error:', error);
+                setStatus('auth', 'error', 'Error');
+                document.getElementById('pending-requests').textContent = 'Error';
+                document.getElementById('enhanced-mode').textContent = 'Error';
+            }
+        }
+
+        // Test blockchain connectivity
+        async function testBlockchain() {
+            try {
+                const response = await fetch(`${API_BASE}/test/blockchain-write`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Blockchain test successful!\n\nThe Enhanced Authorization Service is working correctly.');
+                } else {
+                    alert('❌ Blockchain test failed!\n\n' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('❌ Blockchain test error:', error);
+                alert('❌ Blockchain test failed!\n\n' + error.message);
+            }
+        }
+
+        // Start email monitoring
+        async function startEmailMonitoring() {
+            try {
+                const response = await fetch(`${API_BASE}/email-monitoring/start`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Email monitoring started!\n\nThe system is now monitoring process@rivetz.com for incoming emails.');
+                    updateEmailStatus(); // Refresh email status
+                } else {
+                    alert('❌ Failed to start email monitoring!\n\n' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('❌ Email monitoring start error:', error);
+                alert('❌ Failed to start email monitoring!\n\n' + error.message);
+            }
+        }
+
+        // Utility function to set status indicators
+        function setStatus(type, status, text) {
+            const indicator = document.getElementById(`${type}-indicator`);
+            const statusText = document.getElementById(`${type}-status`);
+            
+            // Remove existing status classes
+            indicator.className = 'status-indicator';
+            
+            // Add new status class
+            switch(status) {
+                case 'connected':
+                    indicator.classList.add('status-connected');
+                    break;
+                case 'warning':
+                    indicator.classList.add('status-warning');
+                    break;
+                case 'error':
+                    indicator.classList.add('status-error');
+                    break;
+            }
+            
+            statusText.textContent = text;
+        }
+    </script>
+</body>
+</html>

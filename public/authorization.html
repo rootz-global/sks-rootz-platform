@@ -157,7 +157,7 @@
 
     <script>
         let provider, signer, userAddress;
-        const contractAddress = '0xcC2a65A8870289B1d33bA741069cC2CEEA219573';
+        const API_BASE = `${window.location.origin}/.rootz`;
 
         // Connect MetaMask
         async function connectWallet() {
@@ -167,6 +167,13 @@
                     await provider.send("eth_requestAccounts", []);
                     signer = provider.getSigner();
                     userAddress = await signer.getAddress();
+                    
+                    // Verify network (Polygon Amoy)
+                    const network = await provider.getNetwork();
+                    if (network.chainId !== 80002) {
+                        showStatus('Please switch to Polygon Amoy testnet (Chain ID: 80002) in MetaMask.', 'error');
+                        return;
+                    }
                     
                     updateWalletStatus(true);
                     loadAuthorizationRequests();
@@ -198,22 +205,26 @@
             }
         }
 
-        // Load authorization requests for connected wallet
+        // Load authorization requests for connected wallet - FIXED API ENDPOINTS
         async function loadAuthorizationRequests() {
             if (!userAddress) return;
 
             try {
                 showStatus('Loading your authorization requests...', 'info');
                 
-                // Call platform API to get user's pending requests
-                const response = await fetch(`/.rootz/email-processing/authorization-requests/${userAddress}`);
+                // Call Enhanced Authorization Service API to get user's pending requests
+                const response = await fetch(`${API_BASE}/authorization/user-requests/${userAddress}`);
                 const data = await response.json();
                 
-                if (data.success && data.requests.length > 0) {
-                    displayAuthorizationRequests(data.requests);
+                if (data.success && data.data && data.data.requests && data.data.requests.length > 0) {
+                    displayAuthorizationRequests(data.data.requests);
                     clearStatus();
                 } else {
-                    document.getElementById('requestsList').innerHTML = '<p>No pending authorization requests found.</p><p>Send an email to process@rivetz.com to create an authorization request.</p>';
+                    document.getElementById('requestsList').innerHTML = `
+                        <p>No pending authorization requests found.</p>
+                        <p>Send an email to <strong>process@rivetz.com</strong> with your wallet address <code>${userAddress}</code> to create an authorization request.</p>
+                        <p><small>Example: "Please create a DATA_WALLET for my address: ${userAddress}"</small></p>
+                    `;
                     clearStatus();
                 }
             } catch (error) {
@@ -234,23 +245,33 @@
                 requestDiv.innerHTML = `
                     <h4>Email Wallet Authorization</h4>
                     <div class="email-preview">
-                        <strong>From:</strong> ${request.emailData.from}<br>
-                        <strong>Subject:</strong> ${request.emailData.subject}<br>
-                        <strong>Date:</strong> ${new Date(request.emailData.date).toLocaleString()}<br>
-                        <strong>Attachments:</strong> ${request.emailData.attachmentCount}<br>
+                        <strong>From:</strong> ${request.emailSender || 'Unknown'}<br>
+                        <strong>Subject:</strong> ${request.emailSubject || 'Unknown'}<br>
+                        <strong>Date:</strong> ${new Date(request.createdAt).toLocaleString()}<br>
+                        <strong>Attachments:</strong> ${request.attachmentCount || 0}<br>
                         <strong>Credit Cost:</strong> ${request.creditCost} credits
                     </div>
-                    <p><strong>IPFS Storage:</strong> <a href="${request.ipfsUrl}" target="_blank" class="ipfs-link">${request.ipfsHash}</a></p>
+                    ${request.ipfsHash ? `<p><strong>IPFS Storage:</strong> <a href="https://gateway.pinata.cloud/ipfs/${request.ipfsHash}" target="_blank" class="ipfs-link">${request.ipfsHash}</a></p>` : ''}
                     <p><strong>Request ID:</strong> <code>${request.requestId}</code></p>
                     <p><strong>Expires:</strong> ${new Date(request.expiresAt).toLocaleString()}</p>
+                    <p><strong>Status:</strong> <span style="text-transform: capitalize;">${request.status}</span></p>
                     
                     <div style="margin-top: 20px;">
-                        <button onclick="authorizeRequest('${request.requestId}')" class="button button-primary">
-                            Authorize with MetaMask
-                        </button>
-                        <button onclick="rejectRequest('${request.requestId}')" class="button button-danger">
-                            Reject
-                        </button>
+                        ${request.status === 'pending' ? `
+                            <button onclick="authorizeRequest('${request.requestId}')" class="button button-primary">
+                                Authorize with Enhanced Service
+                            </button>
+                            <button onclick="rejectRequest('${request.requestId}')" class="button button-danger">
+                                Reject
+                            </button>
+                        ` : `
+                            <button class="button" disabled>
+                                ${request.status === 'processed' ? 'Wallet Created ✓' : 
+                                  request.status === 'authorized' ? 'Authorized ✓' : 
+                                  request.status === 'expired' ? 'Expired ❌' : 
+                                  request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                            </button>
+                        `}
                     </div>
                     
                     <div id="request-status-${request.requestId}"></div>
@@ -259,13 +280,13 @@
             });
         }
 
-        // Authorize request with MetaMask
+        // Authorize request using Enhanced Authorization Service - FIXED
         async function authorizeRequest(requestId) {
             try {
                 const statusDiv = document.getElementById(`request-status-${requestId}`);
                 statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Creating authorization signature...</div>';
 
-                // Create message hash for signing
+                // Create message hash for signing (consistent with Enhanced Authorization Service)
                 const messageHash = ethers.utils.keccak256(
                     ethers.utils.solidityPack(['bytes32'], [requestId])
                 );
@@ -273,27 +294,31 @@
                 // Sign message with MetaMask
                 const signature = await signer.signMessage(ethers.utils.arrayify(messageHash));
                 
-                statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Submitting authorization to blockchain...</div>';
+                statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Submitting to Enhanced Authorization Service...</div>';
 
-                // Send signature to platform for processing
-                const response = await fetch('/.rootz/email-processing/authorize', {
+                // Send signature to Enhanced Authorization Service API
+                const response = await fetch(`${API_BASE}/authorization/authorize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         requestId,
-                        signature,
-                        userAddress
+                        userAddress,
+                        signature
                     })
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
+                    const walletId = result.data?.emailWalletId || result.emailWalletId;
+                    const txHash = result.data?.authorizationTx || result.authorizationTx;
+                    
                     statusDiv.innerHTML = `
                         <div class="status status-success">
-                            Authorization successful!<br>
-                            <strong>Transaction:</strong> <a href="https://amoy.polygonscan.com/tx/${result.transactionHash}" target="_blank">${result.transactionHash}</a><br>
-                            Your EMAIL_WALLET will be created shortly.
+                            ✅ Authorization successful! Email wallet created.<br>
+                            ${walletId ? `<strong>Wallet ID:</strong> ${walletId}<br>` : ''}
+                            ${txHash ? `<strong>Transaction:</strong> <a href="https://amoy.polygonscan.com/tx/${txHash}" target="_blank">${txHash}</a><br>` : ''}
+                            Your EMAIL_DATA_WALLET is now available on the blockchain.
                         </div>
                     `;
                     
@@ -310,17 +335,17 @@
             }
         }
 
-        // Reject request
+        // Reject request using Enhanced Authorization Service - FIXED
         async function rejectRequest(requestId) {
             if (!confirm('Are you sure you want to reject this email wallet creation?')) {
                 return;
             }
 
             try {
-                const response = await fetch('/.rootz/email-processing/reject', {
+                const response = await fetch(`${API_BASE}/authorization/cancel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requestId, userAddress })
+                    body: JSON.stringify({ requestId })
                 });
 
                 const result = await response.json();
