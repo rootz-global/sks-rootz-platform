@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Config } from '../core/configuration';
-import AuthorizationService from '../services/authorization/AuthorizationService';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
 import LocalIPFSService from '../services/ipfs/PinataIPFSService';
 import EmailParser from '../services/email-processing/EmailParser';
 
@@ -10,13 +10,13 @@ import EmailParser from '../services/email-processing/EmailParser';
  */
 export class EmailProcessingController {
   private config: Config;
-  private authService: AuthorizationService;
+  private authService: EnhancedAuthorizationService;
   private ipfsService: LocalIPFSService;
   private emailParser: EmailParser;
 
   constructor(config: Config) {
     this.config = config;
-    this.authService = new AuthorizationService(config);
+    this.authService = new EnhancedAuthorizationService(config);
     this.ipfsService = new LocalIPFSService(config);
     this.emailParser = new EmailParser();
     
