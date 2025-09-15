@@ -77,14 +77,14 @@ export class BlockchainService {
   }
 
   private initializeContracts(): void {
-    // EmailWalletRegistration ABI - CORRECTED FUNCTION NAMES
+    // EmailWalletRegistration ABI - MATCHES DEPLOYED CONTRACT
     const registrationABI = [
-      "function isUserRegistered(address wallet) view returns (bool)",
+      "function isRegistered(address wallet) view returns (bool)",
       "function getCreditBalance(address wallet) view returns (uint256)", 
       "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
       "function depositCredits(address wallet) payable",
       "function deductCredits(address wallet, uint256 amount) returns (bool)",
-      "function getUserRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
+      "function getRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
       "function owner() view returns (address)"
     ];
 
@@ -167,7 +167,7 @@ export class BlockchainService {
       }
       
       const validAddress = this.validateAndFormatAddress(userAddress);
-      const result = await this.contracts.registration.isUserRegistered(validAddress);
+      const result = await this.contracts.registration.isRegistered(validAddress);
       console.log(`🔍 User ${validAddress} registration status: ${result}`);
       return result;
     } catch (error) {
@@ -202,7 +202,7 @@ export class BlockchainService {
       }
       
       const validAddress = this.validateAndFormatAddress(userAddress);
-      const registration = await this.contracts.registration.getUserRegistration(validAddress);
+      const registration = await this.contracts.registration.getRegistration(validAddress);
       
       return {
         registrationId: registration.registrationId,
@@ -332,7 +332,7 @@ export class BlockchainService {
       const validAddress = this.validateAndFormatAddress(userAddress);
       console.log(`📝 Attempting registration for ${validAddress} with email: ${primaryEmail}`);
 
-      const isAlreadyRegistered = await this.contracts.registration.isUserRegistered(validAddress);
+      const isAlreadyRegistered = await this.contracts.registration.isRegistered(validAddress);
       if (isAlreadyRegistered) {
         console.log(`⚠️ User ${validAddress} is already registered`);
         return false;
