@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Controller } from './Controller';
 import { BlockchainService } from '../services/BlockchainService';
 import { GraphEmailMonitorService } from '../services/GraphEmailMonitorService';
+import { ConfigService } from '../services/ConfigService';
 
 export class EmailWalletController extends Controller {
   private blockchainService: BlockchainService;
@@ -16,9 +17,10 @@ export class EmailWalletController extends Controller {
 
   private initializeServices(req: Request): void {
     if (!this.blockchainService) {
-      const config = this.getConfigFromRequest(req);
-      this.blockchainService = new BlockchainService(config);
-      this.emailMonitorService = new GraphEmailMonitorService('localhost'); // TODO: get domain from request
+      const domain = this.getDomainFromRequest(req);
+      const configService = new ConfigService(domain);
+      this.blockchainService = new BlockchainService(configService);
+      this.emailMonitorService = new GraphEmailMonitorService(domain);
     }
   }
 
