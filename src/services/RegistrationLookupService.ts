@@ -7,8 +7,20 @@ export class RegistrationLookupService {
     private registrationContract: ethers.Contract;
 
     constructor() {
-        const config = Config.getInstance().getDomainConfig();
-        this.provider = new ethers.providers.JsonRpcProvider(config.blockchain.rpcUrl);
+        // Create new Config instance and load domain configuration
+        const config = new Config();
+        const domain = process.env.DOMAIN || 'localhost';
+        config.loadDomain(domain);
+        
+        // Get blockchain configuration
+        const rpcUrl = config.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
+        const contractRegistration = config.get('blockchain.contractRegistration') || config.get('contractRegistration');
+        
+        if (!contractRegistration) {
+            throw new Error('Registration contract address not found in configuration');
+        }
+        
+        this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         
         // Registration contract ABI - key functions we need
         const registrationABI = [
@@ -18,10 +30,12 @@ export class RegistrationLookupService {
         ];
 
         this.registrationContract = new ethers.Contract(
-            config.blockchain.contractRegistration,
+            contractRegistration,
             registrationABI,
             this.provider
         );
+        
+        console.log(`[REGISTRATION] Initialized with contract: ${contractRegistration}`);
     }
 
     /**
