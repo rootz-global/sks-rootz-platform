@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 import { Config } from '../../core/configuration';
 import { ParsedEmailData } from '../email-processing/EmailParser';
-import { DatabaseService } from '../database/DatabaseService';
 
 export interface AuthorizationRequest {
   requestId: string;
@@ -32,11 +31,13 @@ export interface AuthorizationResult {
 }
 
 /**
- * Enhanced Authorization Service with PostgreSQL Database
+ * Enhanced Authorization Service - Uses new EmailDataWalletOS_Secure contract
  * 
- * SOLVES: Authorization request persistence issues by using database storage
- * instead of problematic in-memory Maps that don't survive service restarts
- * or work correctly across multiple service instances.
+ * This service solves the owner vs user authorization problem by:
+ * 1. Creating authorization requests in memory (not on old contract)
+ * 2. User provides signature proving consent
+ * 3. Service creates EMAIL_DATA_WALLET directly using new enhanced contract
+ * 4. Bypasses complex old authorization flow entirely
  */
 export class EnhancedAuthorizationService {
   private provider!: ethers.providers.JsonRpcProvider;
@@ -44,33 +45,14 @@ export class EnhancedAuthorizationService {
   private emailDataWalletContract!: ethers.Contract;
   private registrationContract!: ethers.Contract;
   private config!: Config;
-  private database: DatabaseService;
+  
+  // In-memory storage for authorization requests (replace with database in production)
+  private authorizationRequests: Map<string, AuthorizationRequest> = new Map();
+  private tokenToRequestId: Map<string, string> = new Map();
   
   constructor(config: Config) {
     this.config = config;
-    this.database = new DatabaseService(config);
     this.initializeBlockchain();
-  }
-  
-  /**
-   * Initialize database connection and blockchain
-   */
-  async initialize(): Promise<void> {
-    try {
-      console.log('📊 Initializing Enhanced Authorization Service with database...');
-      
-      // Initialize database first
-      await this.database.initialize();
-      
-      // Clean up any expired requests
-      await this.database.cleanupExpiredRequests();
-      
-      console.log('✅ Enhanced Authorization Service initialized with database persistence');
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize Enhanced Authorization Service:', error);
-      throw error;
-    }
   }
   
   /**
@@ -99,7 +81,7 @@ export class EnhancedAuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // NEW EmailDataWalletOS_Secure ABI
+      // NEW EmailDataWalletOS_Secure ABI (based on your deployment)
       const emailDataWalletABI = [
         "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
         "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
@@ -143,7 +125,7 @@ export class EnhancedAuthorizationService {
   }
   
   /**
-   * Create authorization request (stored in DATABASE, not memory)
+   * Create authorization request (stored in memory, not on old contract)
    */
   async createAuthorizationRequest(
     userAddress: string,
@@ -197,13 +179,13 @@ export class EnhancedAuthorizationService {
         emailData
       };
       
-      // Store in DATABASE (not memory)
-      await this.database.createAuthorizationRequest(authRequest);
+      // Store in memory (would be database in production)
+      this.authorizationRequests.set(requestId, authRequest);
+      this.tokenToRequestId.set(authToken, requestId);
       
       console.log(`✅ Enhanced authorization request created:`);
       console.log(`   Request ID: ${requestId}`);
       console.log(`   Auth Token: ${authToken}`);
-      console.log(`   📊 Stored in database (persistent)`);
       
       return {
         success: true,
@@ -222,6 +204,7 @@ export class EnhancedAuthorizationService {
   
   /**
    * ENHANCED USER AUTHORIZATION - Direct wallet creation with signature verification
+   * This is the missing piece that solves the owner vs user problem!
    */
   async authorizeEmailWalletCreation(
     requestId: string,
@@ -234,8 +217,8 @@ export class EnhancedAuthorizationService {
       console.log(`   Request ID: ${requestId}`);
       console.log(`   User Address: ${userAddress}`);
       
-      // Get authorization request from DATABASE
-      const request = await this.database.getAuthorizationRequest(requestId);
+      // Get authorization request
+      const request = this.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Authorization request not found');
       }
@@ -249,7 +232,7 @@ export class EnhancedAuthorizationService {
       }
       
       if (new Date() > request.expiresAt) {
-        await this.database.updateRequestStatus(requestId, 'expired');
+        request.status = 'expired';
         throw new Error('Authorization request has expired');
       }
       
@@ -307,8 +290,8 @@ export class EnhancedAuthorizationService {
       // Extract wallet ID from transaction logs
       const walletId = this.extractWalletIdFromReceipt(receipt);
       
-      // Update request status in DATABASE
-      await this.database.updateRequestStatus(requestId, 'processed');
+      // Update request status
+      request.status = 'processed';
       
       console.log(`🎉 EMAIL_DATA_WALLET creation complete:`);
       console.log(`   Wallet ID: ${walletId}`);
@@ -333,48 +316,66 @@ export class EnhancedAuthorizationService {
   }
   
   /**
-   * Get authorization request details from DATABASE
+   * Get authorization request details
    */
   async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
-    try {
-      return await this.database.getAuthorizationRequest(requestId);
-    } catch (error) {
-      console.error('❌ Error getting authorization request:', error);
-      return null;
-    }
+    return this.authorizationRequests.get(requestId) || null;
   }
   
   /**
-   * Get authorization request by auth token from DATABASE
+   * Get authorization request by auth token
    */
   async getAuthorizationRequestByToken(authToken: string): Promise<AuthorizationRequest | null> {
-    try {
-      return await this.database.getAuthorizationRequestByToken(authToken);
-    } catch (error) {
-      console.error('❌ Error getting authorization request by token:', error);
+    const requestId = this.tokenToRequestId.get(authToken);
+    if (!requestId) {
       return null;
     }
+    return this.getAuthorizationRequest(requestId);
   }
   
   /**
-   * Get user's authorization requests from DATABASE
+   * Get user's EMAIL_DATA_WALLETs from enhanced contract
    */
-  async getUserRequests(userAddress: string): Promise<string[]> {
+  async getUserEmailWallets(userAddress: string): Promise<string[]> {
     try {
-      const requests = await this.database.getUserRequests(userAddress);
-      return requests.map(request => request.requestId);
+      const wallets = await this.emailDataWalletContract.getAllUserWallets(userAddress);
+      console.log(`📧 User ${userAddress} has ${wallets.length} email wallets`);
+      return wallets;
     } catch (error) {
-      console.error('❌ Error getting user requests:', error);
+      console.error('❌ Error getting user email wallets:', error);
       return [];
     }
   }
   
   /**
-   * Cancel authorization request in DATABASE
+   * Get EMAIL_DATA_WALLET details
+   */
+  async getEmailWalletDetails(walletId: string): Promise<any> {
+    try {
+      const wallet = await this.emailDataWalletContract.getEmailDataWallet(walletId);
+      
+      return {
+        walletId,
+        owner: wallet.owner,
+        subject: wallet.subject,
+        sender: wallet.sender,
+        timestamp: wallet.timestamp.toNumber(),
+        isActive: wallet.isActive,
+        contentHash: wallet.contentHash,
+        ipfsHash: wallet.ipfsHash
+      };
+    } catch (error) {
+      console.error('❌ Error getting email wallet details:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Cancel authorization request
    */
   async cancelRequest(requestId: string): Promise<AuthorizationResult> {
     try {
-      const request = await this.database.getAuthorizationRequest(requestId);
+      const request = this.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Request not found');
       }
@@ -383,7 +384,7 @@ export class EnhancedAuthorizationService {
         throw new Error(`Cannot cancel request with status: ${request.status}`);
       }
       
-      await this.database.updateRequestStatus(requestId, 'cancelled');
+      request.status = 'cancelled';
       
       console.log(`🚫 Request cancelled: ${requestId}`);
       
@@ -402,24 +403,60 @@ export class EnhancedAuthorizationService {
   }
   
   /**
+   * Extract wallet ID from transaction receipt
+   */
+  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
+    try {
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {
+          // The wallet ID should be in the first topic (after event signature)
+          if (log.topics.length >= 2) {
+            return log.topics[1];
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to extract wallet ID from receipt:', error);
+      return null;
+    }
+  }
+  
+  /**
    * Check if authorization request is valid
    */
   async isRequestValid(requestId: string): Promise<boolean> {
     try {
-      const request = await this.database.getAuthorizationRequest(requestId);
+      const request = this.authorizationRequests.get(requestId);
       if (!request) return false;
       
       if (request.status !== 'pending') return false;
-      if (new Date() > request.expiresAt) {
-        // Auto-expire the request
-        await this.database.updateRequestStatus(requestId, 'expired');
-        return false;
-      }
+      if (new Date() > request.expiresAt) return false;
       
       return true;
     } catch (error) {
       console.error('Error checking request validity:', error);
       return false;
+    }
+  }
+  
+  /**
+   * Get user's authorization requests
+   */
+  async getUserRequests(userAddress: string): Promise<string[]> {
+    try {
+      const userRequests: string[] = [];
+      
+      for (const [requestId, request] of this.authorizationRequests.entries()) {
+        if (request.userAddress.toLowerCase() === userAddress.toLowerCase()) {
+          userRequests.push(requestId);
+        }
+      }
+      
+      return userRequests;
+    } catch (error) {
+      console.error('Error getting user requests:', error);
+      return [];
     }
   }
   
@@ -432,7 +469,7 @@ export class EnhancedAuthorizationService {
     ipfsHash: string
   ): Promise<AuthorizationResult> {
     try {
-      const request = await this.database.getAuthorizationRequest(requestId);
+      const request = this.authorizationRequests.get(requestId);
       if (!request) {
         throw new Error('Request not found');
       }
@@ -459,13 +496,13 @@ export class EnhancedAuthorizationService {
       const receipt = await createTx.wait();
       const walletId = this.extractWalletIdFromReceipt(receipt);
       
-      await this.database.updateRequestStatus(requestId, 'processed');
+      request.status = 'processed';
       
       return {
         success: true,
         requestId,
         emailWalletId: walletId || undefined,
-        attachmentWalletIds: [],
+        attachmentWalletIds: [], // Enhanced contract handles email + attachments in one wallet
         authorizationTx: createTx.hash,
         totalCreditsUsed: request.creditCost
       };
@@ -488,23 +525,16 @@ export class EnhancedAuthorizationService {
       const balanceInEth = ethers.utils.formatEther(balance);
       const blockNumber = await this.provider.getBlockNumber();
       
-      // Check database health
-      const dbHealth = await this.database.healthCheck();
-      const dbStats = await this.database.getStatistics();
-      
       return {
-        healthy: parseFloat(balanceInEth) > 0.01 && dbHealth.healthy,
+        healthy: parseFloat(balanceInEth) > 0.01,
         details: {
           serviceWallet: this.serviceWallet.address,
           balance: `${balanceInEth} POL`,
           blockNumber,
           emailDataWalletContract: this.emailDataWalletContract.address,
           registrationContract: this.registrationContract.address,
-          database: dbHealth.details,
-          pendingRequests: dbStats.totalRequests,
-          requestsByStatus: dbStats.byStatus,
-          enhanced: true,
-          persistent: true
+          pendingRequests: this.authorizationRequests.size,
+          enhanced: true
         }
       };
       
@@ -514,32 +544,6 @@ export class EnhancedAuthorizationService {
         details: { error: error?.message || 'Unknown error' }
       };
     }
-  }
-  
-  /**
-   * Extract wallet ID from transaction receipt
-   */
-  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
-    try {
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {
-          if (log.topics.length >= 2) {
-            return log.topics[1];
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to extract wallet ID from receipt:', error);
-      return null;
-    }
-  }
-  
-  /**
-   * Close database connections
-   */
-  async close(): Promise<void> {
-    await this.database.close();
   }
 }
 

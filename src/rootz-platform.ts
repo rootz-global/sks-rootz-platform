@@ -72,6 +72,10 @@ export class RootzPlatform {
     try {
       console.log('🔐 Initializing shared Enhanced Authorization Service...');
       this.sharedAuthService = new EnhancedAuthorizationService(this.config);
+      
+      // Initialize database connection
+      await this.sharedAuthService.initialize();
+      
       console.log('✅ Shared Enhanced Authorization Service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize Enhanced Authorization Service:', error);
