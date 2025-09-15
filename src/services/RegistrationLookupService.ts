@@ -1,10 +1,11 @@
 // src/services/RegistrationLookupService.ts
+// Updated for Unified Contract Architecture
 import { ethers } from 'ethers';
 import { Config } from '../core/configuration/Config';
 
 export class RegistrationLookupService {
     private provider: ethers.providers.JsonRpcProvider;
-    private registrationContract: ethers.Contract;
+    private unifiedContract: ethers.Contract;
 
     constructor() {
         // Create new Config instance and load domain configuration
@@ -14,46 +15,53 @@ export class RegistrationLookupService {
         
         // Get blockchain configuration
         const rpcUrl = config.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
-        const contractRegistration = config.get('blockchain.contractRegistration') || config.get('contractRegistration');
         
-        if (!contractRegistration) {
-            throw new Error('Registration contract address not found in configuration');
+        // Use unified contract address
+        const unifiedContract = config.get('blockchain.unifiedContract') || 
+                               config.get('unifiedContract') ||
+                               // Fallback to old contract names for compatibility during migration
+                               config.get('blockchain.contractRegistration') || 
+                               config.get('contractRegistration');
+        
+        if (!unifiedContract) {
+            throw new Error('Unified contract address not found in configuration');
         }
         
         this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         
-        // Registration contract ABI - MATCHES DEPLOYED CONTRACT
-        const registrationABI = [
+        // Unified contract ABI - matches EmailDataWalletOS_Secure
+        const unifiedABI = [
+            "function owner() view returns (address)",
             "function isRegistered(address wallet) view returns (bool)",
-            "function getCreditBalance(address wallet) view returns (uint256)", 
-            "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
+            "function getCreditBalance(address wallet) view returns (uint256)",
+            "function getRegistration(address wallet) view returns (bytes32 userId, string email, uint256 registeredAt, bool isActive, uint256 creditBalance)",
+            "function registerUser(address userWallet, string email) payable returns (bytes32 userId)",
             "function depositCredits(address wallet) payable",
             "function deductCredits(address wallet, uint256 amount) returns (bool)",
-            "function getRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
-            "function owner() view returns (address)"
+            "function createWalletWithAuthorization(address userWallet, string email, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
+            "function getAllUserWallets(address user) view returns (bytes32[] memory)",
+            "function getActiveWalletCount(address user) view returns (uint256)"
         ];
 
-        this.registrationContract = new ethers.Contract(
-            contractRegistration,
-            registrationABI,
+        this.unifiedContract = new ethers.Contract(
+            unifiedContract,
+            unifiedABI,
             this.provider
         );
         
-        console.log(`[REGISTRATION] Initialized with contract: ${contractRegistration}`);
+        console.log(`[REGISTRATION] Initialized with unified contract: ${unifiedContract}`);
     }
 
     /**
      * Look up wallet address by email address
-     * NOTE: The deployed contract doesn't have getUserByEmail function
-     * This will need to be implemented differently (database lookup or different approach)
+     * NOTE: Email-to-wallet mapping is stored in the unified contract
      */
     async getWalletByEmail(email: string): Promise<string | null> {
         try {
             console.log(`[REGISTRATION] Looking up wallet for email: ${email}`);
             console.log(`[REGISTRATION] WARNING: Contract doesn't have getUserByEmail function`);
             
-            // TODO: Implement email-to-wallet mapping via different method
-            // Options: database lookup, event scanning, or enhanced contract
+            // TODO: Implement email-to-wallet mapping via event scanning or database
             console.log(`[REGISTRATION] No wallet registered for email: ${email} - function not available`);
             return null;
             
@@ -68,7 +76,7 @@ export class RegistrationLookupService {
      */
     async isUserRegistered(address: string): Promise<boolean> {
         try {
-            const isRegistered = await this.registrationContract.isRegistered(address);
+            const isRegistered = await this.unifiedContract.isRegistered(address);
             console.log(`[REGISTRATION] Address ${address} registered: ${isRegistered}`);
             return isRegistered;
         } catch (error) {
@@ -84,13 +92,11 @@ export class RegistrationLookupService {
         try {
             console.log(`[REGISTRATION] Getting full registration for: ${address}`);
             
-            const registration = await this.registrationContract.getRegistration(address);
+            const registration = await this.unifiedContract.getRegistration(address);
             
             const result = {
-                registrationId: registration.registrationId,
-                primaryEmail: registration.primaryEmail,
-                parentCorporateWallet: registration.parentCorporateWallet,
-                autoProcessCC: registration.autoProcessCC,
+                userId: registration.userId,
+                email: registration.email,
                 registeredAt: new Date(registration.registeredAt.toNumber() * 1000),
                 isActive: registration.isActive,
                 creditBalance: registration.creditBalance.toNumber()
