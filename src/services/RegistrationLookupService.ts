@@ -22,11 +22,15 @@ export class RegistrationLookupService {
         
         this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         
-        // Registration contract ABI - key functions we need
+        // Registration contract ABI - MATCHES DEPLOYED CONTRACT
         const registrationABI = [
-            "function getUserByEmail(string memory email) external view returns (address)",
-            "function isUserRegistered(address user) external view returns (bool)",
-            "function getUserRegistration(address user) external view returns (address userAddress, string memory email, uint256 credits, bool isActive, uint256 registeredAt)"
+            "function isRegistered(address wallet) view returns (bool)",
+            "function getCreditBalance(address wallet) view returns (uint256)", 
+            "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
+            "function depositCredits(address wallet) payable",
+            "function deductCredits(address wallet, uint256 amount) returns (bool)",
+            "function getRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
+            "function owner() view returns (address)"
         ];
 
         this.registrationContract = new ethers.Contract(
@@ -40,21 +44,18 @@ export class RegistrationLookupService {
 
     /**
      * Look up wallet address by email address
-     * This is the proper way to find which wallet to create DATA_WALLET for
+     * NOTE: The deployed contract doesn't have getUserByEmail function
+     * This will need to be implemented differently (database lookup or different approach)
      */
     async getWalletByEmail(email: string): Promise<string | null> {
         try {
             console.log(`[REGISTRATION] Looking up wallet for email: ${email}`);
+            console.log(`[REGISTRATION] WARNING: Contract doesn't have getUserByEmail function`);
             
-            const walletAddress = await this.registrationContract.getUserByEmail(email);
-            
-            if (walletAddress === ethers.constants.AddressZero) {
-                console.log(`[REGISTRATION] No wallet registered for email: ${email}`);
-                return null;
-            }
-
-            console.log(`[REGISTRATION] Found wallet ${walletAddress} for email: ${email}`);
-            return walletAddress;
+            // TODO: Implement email-to-wallet mapping via different method
+            // Options: database lookup, event scanning, or enhanced contract
+            console.log(`[REGISTRATION] No wallet registered for email: ${email} - function not available`);
+            return null;
             
         } catch (error) {
             console.error(`[REGISTRATION] Error looking up email ${email}:`, error);
@@ -67,7 +68,7 @@ export class RegistrationLookupService {
      */
     async isUserRegistered(address: string): Promise<boolean> {
         try {
-            const isRegistered = await this.registrationContract.isUserRegistered(address);
+            const isRegistered = await this.registrationContract.isRegistered(address);
             console.log(`[REGISTRATION] Address ${address} registered: ${isRegistered}`);
             return isRegistered;
         } catch (error) {
@@ -83,14 +84,16 @@ export class RegistrationLookupService {
         try {
             console.log(`[REGISTRATION] Getting full registration for: ${address}`);
             
-            const registration = await this.registrationContract.getUserRegistration(address);
+            const registration = await this.registrationContract.getRegistration(address);
             
             const result = {
-                userAddress: registration.userAddress,
-                email: registration.email,
-                credits: registration.credits.toNumber(),
+                registrationId: registration.registrationId,
+                primaryEmail: registration.primaryEmail,
+                parentCorporateWallet: registration.parentCorporateWallet,
+                autoProcessCC: registration.autoProcessCC,
+                registeredAt: new Date(registration.registeredAt.toNumber() * 1000),
                 isActive: registration.isActive,
-                registeredAt: new Date(registration.registeredAt.toNumber() * 1000)
+                creditBalance: registration.creditBalance.toNumber()
             };
 
             console.log(`[REGISTRATION] Registration details:`, result);
