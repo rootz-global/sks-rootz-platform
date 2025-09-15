@@ -19,45 +19,31 @@ import { ConfigService } from './ConfigService';
 export class BlockchainService {
     private provider!: ethers.providers.JsonRpcProvider;
     private serviceWallet!: ethers.Wallet;
-    private unifiedContract!: ethers.Contract;
+    private registrationContract!: ethers.Contract;
+    private emailDataWalletContract!: ethers.Contract;
+    private authorizationContract!: ethers.Contract;
     private config: ConfigService;
 
-    // UNIFIED CONTRACT ABI - All functions in one contract
-    private readonly UNIFIED_ABI = [
-        // OWNER MANAGEMENT
-        "function owner() view returns (address)",
-        "function transferOwnership(address newOwner)",
-        
-        // USER REGISTRATION & MANAGEMENT
-        "function registerUser(address userWallet, string email) payable returns (bytes32 userId)",
-        "function isRegistered(address userWallet) view returns (bool)",
-        "function getRegistration(address userWallet) view returns (bytes32 userId, string email, uint256 registeredAt, bool isActive, uint256 creditBalance)",
-        "function getCreditBalance(address userWallet) view returns (uint256)",
-        
-        // CREDIT MANAGEMENT
-        "function depositCredits(address userWallet) payable",
-        "function deductCredits(address userWallet, uint256 amount) returns (bool)",
-        
-        // EMAIL DATA WALLET CREATION
-        "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
-        "function createWalletWithAuthorization(address userWallet, string email, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
-        
-        // WALLET QUERIES
-        "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
-        "function getAllUserWallets(address user) view returns (bytes32[] memory)",
-        "function getActiveWalletCount(address user) view returns (uint256)",
-        
-        // ENHANCED FEATURES
-        "function validateDataIntegrity(bytes32 walletId) view returns (bool)",
-        "function getWalletProvenance(bytes32 walletId) view returns (string memory)",
-        "function setWalletStatus(bytes32 walletId, uint8 status)",
-        "function getWalletStatus(bytes32 walletId) view returns (uint8)",
-        
-        // EVENTS
-        "event UserRegistered(address indexed userWallet, bytes32 indexed userId, string email)",
-        "event EmailDataWalletCreated(bytes32 indexed walletId, address indexed owner, string subject, string sender)",
-        "event CreditsDeposited(address indexed userWallet, uint256 amount)",
-        "event CreditsDeducted(address indexed userWallet, uint256 amount)"
+    // REGISTRATION CONTRACT ABI
+    private readonly REGISTRATION_ABI = [
+        "function isRegistered(address wallet) view returns (bool)",
+        "function getCreditBalance(address wallet) view returns (uint256)",
+        "function getRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
+        "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
+        "function depositCredits(address wallet) payable",
+        "function deductCredits(address wallet, uint256 amount) returns (bool)",
+        "function owner() view returns (address)"
+    ];
+
+    // EMAIL DATA WALLET CONTRACT ABI  
+    private readonly EMAIL_WALLET_ABI = [
+        "function createEmailDataWallet(address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata) returns (uint256)",
+        "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
+        "function getAllUserWallets(address userAddress) view returns (uint256[] memory)",
+        "function getActiveWalletCount(address userAddress) view returns (uint256)",
+        "function walletExists(uint256 walletId) view returns (bool)",
+        "function getTotalWalletCount() view returns (uint256)",
+        "function owner() view returns (address)"
     ];
 
     constructor(configService: ConfigService) {
@@ -67,7 +53,7 @@ export class BlockchainService {
 
     private async initialize(): Promise<void> {
         try {
-            console.log('🔧 Initializing Unified Blockchain Service...');
+            console.log('🔧 Initializing Multi-Contract Blockchain Service...');
             
             // Initialize provider and wallet
             const rpcUrl = this.config.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
@@ -79,21 +65,32 @@ export class BlockchainService {
             }
             this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
 
-            // Initialize unified contract
-            const contractAddress = this.config.get('blockchain.unifiedContract');
-            if (!contractAddress) {
-                throw new Error('Unified contract address not found in configuration');
+            // Initialize registration contract
+            const registrationAddress = this.config.get('blockchain.contractRegistration');
+            if (!registrationAddress) {
+                throw new Error('Registration contract address not found in configuration');
             }
-
-            this.unifiedContract = new ethers.Contract(
-                contractAddress,
-                this.UNIFIED_ABI,
+            this.registrationContract = new ethers.Contract(
+                registrationAddress,
+                this.REGISTRATION_ABI,
                 this.serviceWallet
             );
 
-            console.log('✅ Unified Blockchain Service initialized');
+            // Initialize email data wallet contract
+            const emailWalletAddress = this.config.get('blockchain.contractEmailDataWallet');
+            if (!emailWalletAddress) {
+                throw new Error('Email data wallet contract address not found in configuration');
+            }
+            this.emailDataWalletContract = new ethers.Contract(
+                emailWalletAddress,
+                this.EMAIL_WALLET_ABI,
+                this.serviceWallet
+            );
+
+            console.log('✅ Multi-Contract Blockchain Service initialized');
             console.log(`   Service Wallet: ${this.serviceWallet.address}`);
-            console.log(`   Unified Contract: ${contractAddress}`);
+            console.log(`   Registration Contract: ${registrationAddress}`);
+            console.log(`   Email Data Wallet Contract: ${emailWalletAddress}`);
             
             // Verify ownership
             await this.verifyContractOwnership();
@@ -105,18 +102,26 @@ export class BlockchainService {
     }
 
     /**
-     * Verify that the service wallet owns the contract
+     * Verify that the service wallet owns the contracts
      */
     private async verifyContractOwnership(): Promise<void> {
         try {
-            const contractOwner = await this.unifiedContract.owner();
-            const isOwner = contractOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
+            const registrationOwner = await this.registrationContract.owner();
+            const isRegistrationOwner = registrationOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
             
-            console.log(`   Contract Owner: ${contractOwner}`);
-            console.log(`   Is Service Owner: ${isOwner}`);
+            const emailWalletOwner = await this.emailDataWalletContract.owner();
+            const isEmailWalletOwner = emailWalletOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
             
-            if (!isOwner) {
-                console.warn('⚠️  WARNING: Service wallet is not the contract owner');
+            console.log(`   Registration Contract Owner: ${registrationOwner}`);
+            console.log(`   Email Wallet Contract Owner: ${emailWalletOwner}`);
+            console.log(`   Is Service Owner (Registration): ${isRegistrationOwner}`);
+            console.log(`   Is Service Owner (Email Wallet): ${isEmailWalletOwner}`);
+            
+            if (!isRegistrationOwner) {
+                console.warn('⚠️  WARNING: Service wallet is not the registration contract owner');
+            }
+            if (!isEmailWalletOwner) {
+                console.warn('⚠️  WARNING: Service wallet is not the email wallet contract owner');
             }
         } catch (error: any) {
             console.warn(`⚠️  Could not verify contract ownership: ${error.message}`);
@@ -265,12 +270,12 @@ export class BlockchainService {
     }
 
     /**
-     * USER QUERIES - Simplified unified contract calls
+     * USER QUERIES - Use registration contract
      */
     async isUserRegistered(userAddress: string): Promise<boolean> {
         try {
             const validAddress = ethers.utils.getAddress(userAddress);
-            return await this.unifiedContract.isRegistered(validAddress);
+            return await this.registrationContract.isRegistered(validAddress);
         } catch (error: any) {
             console.error(`Error checking registration for ${userAddress}: ${error.message}`);
             return false;
@@ -280,7 +285,7 @@ export class BlockchainService {
     async getUserCredits(userAddress: string): Promise<number> {
         try {
             const validAddress = ethers.utils.getAddress(userAddress);
-            const credits = await this.unifiedContract.getCreditBalance(validAddress);
+            const credits = await this.registrationContract.getCreditBalance(validAddress);
             return credits.toNumber();
         } catch (error: any) {
             console.error(`Error getting credits for ${userAddress}: ${error.message}`);
@@ -291,11 +296,11 @@ export class BlockchainService {
     async getUserRegistration(userAddress: string): Promise<any> {
         try {
             const validAddress = ethers.utils.getAddress(userAddress);
-            const registration = await this.unifiedContract.getRegistration(validAddress);
+            const registration = await this.registrationContract.getRegistration(validAddress);
             
             return {
-                userId: registration.userId,
-                email: registration.email,
+                registrationId: registration.registrationId,
+                primaryEmail: registration.primaryEmail,
                 registeredAt: new Date(registration.registeredAt.toNumber() * 1000),
                 isActive: registration.isActive,
                 creditBalance: registration.creditBalance.toNumber()
@@ -306,10 +311,14 @@ export class BlockchainService {
         }
     }
 
+    /**
+     * EMAIL WALLET QUERIES - Use email data wallet contract
+     */
     async getAllUserWallets(userAddress: string): Promise<string[]> {
         try {
             const validAddress = ethers.utils.getAddress(userAddress);
-            return await this.unifiedContract.getAllUserWallets(validAddress);
+            const walletIds = await this.emailDataWalletContract.getAllUserWallets(validAddress);
+            return walletIds.map((id: any) => id.toString());
         } catch (error: any) {
             console.error(`Error getting wallets for ${userAddress}: ${error.message}`);
             return [];
@@ -318,16 +327,19 @@ export class BlockchainService {
 
     async getEmailWallet(walletId: string): Promise<any> {
         try {
-            const wallet = await this.unifiedContract.getEmailDataWallet(walletId);
+            const wallet = await this.emailDataWalletContract.getEmailDataWallet(walletId);
             
             return {
-                owner: wallet.owner,
-                subject: wallet.subject,
-                sender: wallet.sender,
+                walletId: wallet.walletId.toString(),
+                userAddress: wallet.userAddress,
+                emailHash: wallet.emailHash,
+                subjectHash: wallet.subjectHash,
+                contentHash: wallet.contentHash,
+                senderHash: wallet.senderHash,
+                attachmentHashes: wallet.attachmentHashes,
                 timestamp: new Date(wallet.timestamp.toNumber() * 1000),
                 isActive: wallet.isActive,
-                contentHash: wallet.contentHash,
-                ipfsHash: wallet.ipfsHash
+                metadata: wallet.metadata
             };
         } catch (error: any) {
             console.error(`Error getting wallet ${walletId}: ${error.message}`);
@@ -417,16 +429,27 @@ export class BlockchainService {
     async healthCheck(): Promise<any> {
         try {
             const balance = await this.getServiceWalletBalance();
-            const owner = await this.unifiedContract.owner();
-            const isOwner = owner.toLowerCase() === this.serviceWallet.address.toLowerCase();
+            const registrationOwner = await this.registrationContract.owner();
+            const emailWalletOwner = await this.emailDataWalletContract.owner();
+            const isRegistrationOwner = registrationOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
+            const isEmailWalletOwner = emailWalletOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
 
             return {
                 status: 'healthy',
                 serviceWallet: this.serviceWallet.address,
                 balance: `${balance} POL`,
-                contractAddress: this.unifiedContract.address,
-                contractOwner: owner,
-                isContractOwner: isOwner,
+                contracts: {
+                    registration: {
+                        address: this.registrationContract.address,
+                        owner: registrationOwner,
+                        isOwner: isRegistrationOwner
+                    },
+                    emailDataWallet: {
+                        address: this.emailDataWalletContract.address,
+                        owner: emailWalletOwner,
+                        isOwner: isEmailWalletOwner
+                    }
+                },
                 network: 'Polygon Amoy (80002)'
             };
         } catch (error: any) {
