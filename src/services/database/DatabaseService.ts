@@ -24,15 +24,15 @@ export class DatabaseService {
   constructor(config: Config) {
     this.config = config;
     
-    // Get database configuration
+    // Get database configuration with proper type handling
     const dbConfig: DatabaseConfig = {
-      host: config.get('database.host', 'localhost'),
-      port: parseInt(config.get('database.port', '5432')),
-      database: config.get('database.name', 'sks_rootz_platform'),
-      username: config.get('database.username', 'postgres'),
-      password: config.get('database.password', 'password'),
-      ssl: config.get('database.ssl', false),
-      maxConnections: parseInt(config.get('database.maxConnections', '20'))
+      host: config.get('database.host') || 'localhost',
+      port: parseInt(config.get('database.port') || '5432'),
+      database: config.get('database.name') || 'sks_rootz_platform',
+      username: config.get('database.username') || 'postgres',
+      password: config.get('database.password') || 'password',
+      ssl: config.get('database.ssl') === 'true',
+      maxConnections: parseInt(config.get('database.maxConnections') || '20')
     };
     
     // Create connection pool
