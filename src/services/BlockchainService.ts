@@ -1,4 +1,4 @@
-// SKS Rootz Platform - Blockchain Service (EPISTERY Pattern)
+// SKS Rootz Platform - Blockchain Service (EPISTERY Pattern) - FIXED
 
 import { ethers } from 'ethers';
 
@@ -12,11 +12,37 @@ export class BlockchainService {
     // Use domain configuration from INI files (EPISTERY pattern)
     this.config = domainConfig || this.getDefaultConfig();
     
-    const rpcUrl = this.config.blockchain?.rpcUrl || 'https://rpc-amoy.polygon.technology/';
+    const rpcUrl = this.getConfigValue('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
     this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
     
     this.initializeServiceWallet();
     this.initializeContracts();
+  }
+
+  /**
+   * Helper method to get config values from either Config instance or raw object
+   */
+  private getConfigValue(key: string): string | undefined {
+    // Check if config has a get() method (Config instance)
+    if (this.config && typeof this.config.get === 'function') {
+      return this.config.get(key);
+    }
+    
+    // Handle raw config object (legacy)
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      let value = this.config;
+      for (const part of parts) {
+        if (value && typeof value === 'object' && part in value) {
+          value = value[part];
+        } else {
+          return undefined;
+        }
+      }
+      return typeof value === 'string' ? value : undefined;
+    }
+    
+    return this.config[key];
   }
 
   private getDefaultConfig(): any {
@@ -33,7 +59,8 @@ export class BlockchainService {
   }
 
   private initializeServiceWallet(): void {
-    const privateKey = this.config.blockchain?.serviceWalletPrivateKey || this.config.blockchain?.privateKey;
+    const privateKey = this.getConfigValue('blockchain.serviceWalletPrivateKey') || 
+                      this.getConfigValue('blockchain.privateKey');
     
     if (privateKey && privateKey !== 'YOUR_PRIVATE_KEY_HERE' && privateKey.length > 10) {
       try {
@@ -44,6 +71,8 @@ export class BlockchainService {
       }
     } else {
       console.warn('⚠️ No valid service wallet private key found in configuration');
+      console.warn(`   Checked keys: blockchain.serviceWalletPrivateKey, blockchain.privateKey`);
+      console.warn(`   Config type: ${typeof this.config}, has get(): ${typeof this.config?.get === 'function'}`);
     }
   }
 
@@ -59,19 +88,44 @@ export class BlockchainService {
       "function owner() view returns (address)"
     ];
 
-    const contractAddress = this.config.blockchain?.contracts?.registration || 
-                          this.config.blockchain?.contractRegistration ||
-                          '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F';
+    // EmailDataWallet ABI (Enhanced Contract)
+    const emailDataWalletABI = [
+      "function getUserEmailWallets(address user) view returns (bytes32[] memory)",
+      "function getActiveWalletCount(address user) view returns (uint256)",
+      "function getEmailWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
+      "function createEmailWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)"
+    ];
 
-    if (contractAddress) {
+    // Get contract addresses
+    const registrationAddress = this.getConfigValue('blockchain.contractRegistration') ||
+                               this.getConfigValue('blockchain.contracts.registration') ||
+                               '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F';
+
+    const emailDataWalletAddress = this.getConfigValue('blockchain.contractEmailDataWallet') ||
+                                  this.getConfigValue('blockchain.contracts.emailDataWallet') ||
+                                  '0x0eb8830FaC353A63E912861137b246CAC7FC5977';
+
+    // Initialize contracts
+    if (registrationAddress) {
       this.contracts.registration = new ethers.Contract(
-        contractAddress,
+        registrationAddress,
         registrationABI,
         this.serviceWallet || this.provider
       );
-      console.log(`📄 Registration contract connected: ${contractAddress}`);
+      console.log(`📄 Registration contract connected: ${registrationAddress}`);
     } else {
       console.warn('⚠️ No registration contract address found in configuration');
+    }
+
+    if (emailDataWalletAddress) {
+      this.contracts.emailDataWallet = new ethers.Contract(
+        emailDataWalletAddress,
+        emailDataWalletABI,
+        this.serviceWallet || this.provider
+      );
+      console.log(`📧 Email Data Wallet contract connected: ${emailDataWalletAddress}`);
+    } else {
+      console.warn('⚠️ No email data wallet contract address found in configuration');
     }
   }
 
@@ -162,6 +216,41 @@ export class BlockchainService {
     } catch (error) {
       console.error('❌ Error getting user registration:', error);
       return null;
+    }
+  }
+
+  async getUserEmailWallets(userAddress: string): Promise<string[]> {
+    try {
+      if (!this.contracts.emailDataWallet) {
+        console.warn('⚠️ Email Data Wallet contract not available');
+        return [];
+      }
+      
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const wallets = await this.contracts.emailDataWallet.getUserEmailWallets(validAddress);
+      console.log(`📧 User ${validAddress} has ${wallets.length} email wallets`);
+      return wallets;
+    } catch (error) {
+      console.error('❌ Error getting user email wallets:', error);
+      return [];
+    }
+  }
+
+  async getActiveWalletCount(userAddress: string): Promise<number> {
+    try {
+      if (!this.contracts.emailDataWallet) {
+        console.warn('⚠️ Email Data Wallet contract not available');
+        return 0;
+      }
+      
+      const validAddress = this.validateAndFormatAddress(userAddress);
+      const count = await this.contracts.emailDataWallet.getActiveWalletCount(validAddress);
+      const activeCount = count.toNumber();
+      console.log(`📊 User ${validAddress} has ${activeCount} active wallets`);
+      return activeCount;
+    } catch (error) {
+      console.error('❌ Error getting active wallet count:', error);
+      return 0;
     }
   }
 
@@ -274,6 +363,147 @@ export class BlockchainService {
     } catch (error) {
       console.error('❌ Registration failed:', error);
       return false;
+    }
+  }
+
+  /**
+   * Create an email data wallet on the blockchain
+   */
+  async createEmailWallet(
+    ownerAddress: string,
+    subject: string,
+    sender: string,
+    contentHash: string,
+    ipfsHash: string
+  ): Promise<string | null> {
+    try {
+      if (!this.serviceWallet || !this.contracts.emailDataWallet) {
+        console.error('❌ Service wallet or email data wallet contract not available');
+        return null;
+      }
+
+      const validAddress = this.validateAndFormatAddress(ownerAddress);
+      console.log(`📧 Creating email wallet for ${validAddress}: "${subject}" from ${sender}`);
+
+      const gasPricing = await this.getGasPricing();
+      const contentHashBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(contentHash));
+
+      const tx = await this.contracts.emailDataWallet.createEmailWallet(
+        validAddress,
+        subject,
+        sender,
+        contentHashBytes,
+        ipfsHash,
+        {
+          gasLimit: 300000,
+          maxFeePerGas: gasPricing.maxFeePerGas,
+          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+        }
+      );
+
+      console.log(`📋 Email wallet creation transaction submitted: ${tx.hash}`);
+      const receipt = await tx.wait();
+      console.log(`✅ Email wallet created in block ${receipt.blockNumber}`);
+
+      // Extract wallet ID from transaction logs
+      const walletId = this.extractWalletIdFromReceipt(receipt);
+      if (walletId) {
+        console.log(`📧 Email wallet created with ID: ${walletId}`);
+      }
+
+      return walletId;
+    } catch (error) {
+      console.error('❌ Email wallet creation failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract wallet ID from transaction receipt
+   */
+  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
+    try {
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() === this.contracts.emailDataWallet.address.toLowerCase()) {
+          // The wallet ID should be in the first topic (after event signature)
+          if (log.topics.length >= 2) {
+            return log.topics[1];
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to extract wallet ID from receipt:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get email wallet details
+   */
+  async getEmailWallet(walletId: string): Promise<any> {
+    try {
+      if (!this.contracts.emailDataWallet) {
+        console.warn('⚠️ Email Data Wallet contract not available');
+        return null;
+      }
+
+      const wallet = await this.contracts.emailDataWallet.getEmailWallet(walletId);
+      
+      return {
+        walletId,
+        owner: wallet.owner,
+        subject: wallet.subject,
+        sender: wallet.sender,
+        timestamp: wallet.timestamp.toNumber(),
+        isActive: wallet.isActive,
+        contentHash: wallet.contentHash,
+        ipfsHash: wallet.ipfsHash
+      };
+    } catch (error) {
+      console.error('❌ Error getting email wallet:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Health check for blockchain service
+   */
+  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+    try {
+      const blockNumber = await this.provider.getBlockNumber();
+      let serviceWalletBalance = 'N/A';
+      let walletHealthy = false;
+
+      if (this.serviceWallet) {
+        const balance = await this.serviceWallet.getBalance();
+        serviceWalletBalance = ethers.utils.formatEther(balance) + ' POL';
+        walletHealthy = balance.gt(ethers.utils.parseEther('0.01'));
+      }
+
+      return {
+        healthy: walletHealthy,
+        details: {
+          serviceWallet: this.serviceWallet?.address || 'Not configured',
+          balance: serviceWalletBalance,
+          blockNumber,
+          registrationContract: this.contracts.registration?.address || 'Not configured',
+          emailDataWalletContract: this.contracts.emailDataWallet?.address || 'Not configured',
+          networkConnected: true,
+          configType: typeof this.config,
+          hasGetMethod: typeof this.config?.get === 'function'
+        }
+      };
+
+    } catch (error: any) {
+      return {
+        healthy: false,
+        details: { 
+          error: error?.message || 'Unknown error',
+          configType: typeof this.config,
+          hasGetMethod: typeof this.config?.get === 'function'
+        }
+      };
     }
   }
 }
