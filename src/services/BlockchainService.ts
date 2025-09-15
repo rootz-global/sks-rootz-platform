@@ -17,9 +17,9 @@ import { ConfigService } from './ConfigService';
  * - Lifecycle Management
  */
 export class BlockchainService {
-    private provider: ethers.providers.JsonRpcProvider;
-    private serviceWallet: ethers.Wallet;
-    private unifiedContract: ethers.Contract;
+    private provider!: ethers.providers.JsonRpcProvider;
+    private serviceWallet!: ethers.Wallet;
+    private unifiedContract!: ethers.Contract;
     private config: ConfigService;
 
     // UNIFIED CONTRACT ABI - All functions in one contract
@@ -166,7 +166,7 @@ export class BlockchainService {
                 
                 // Extract user ID from events
                 const userRegisteredEvent = receipt.events?.find(
-                    event => event.event === 'UserRegistered'
+                    (event: any) => event.event === 'UserRegistered'
                 );
                 const userId = userRegisteredEvent?.args?.userId;
 
@@ -240,7 +240,7 @@ export class BlockchainService {
                 
                 // Extract wallet ID from events
                 const walletCreatedEvent = receipt.events?.find(
-                    event => event.event === 'EmailDataWalletCreated'
+                    (event: any) => event.event === 'EmailDataWalletCreated'
                 );
                 const walletId = walletCreatedEvent?.args?.walletId;
 
