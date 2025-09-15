@@ -1,255 +1,326 @@
 import { Request, Response } from 'express';
+import { Controller } from './Controller';
+import { AuthorizationService } from '../services/authorization/AuthorizationService';
 import { Config } from '../core/configuration';
-import AuthorizationService from '../services/authorization/AuthorizationService';
-import LocalIPFSService from '../services/ipfs/LocalIPFSService';
-import EmailParser from '../services/email-processing/EmailParser';
 
-export class AuthorizationController {
-  private config: Config;
+export class AuthorizationController extends Controller {
   private authService: AuthorizationService;
-  private ipfsService: LocalIPFSService;
-  private emailParser: EmailParser;
 
-  constructor(config: Config) {
-    this.config = config;
+  constructor(domain: string = 'localhost') {
+    super();
+    
+    // Initialize authorization service with config
+    const config = new Config();
+    config.loadDomain(domain);
     this.authService = new AuthorizationService(config);
-    this.ipfsService = new LocalIPFSService(config);
-    this.emailParser = new EmailParser();
   }
 
   /**
-   * Get pending authorization requests for a user
+   * Get authorization request by request ID
    */
-  async getAuthorizationRequests(req: Request, res: Response): Promise<void> {
+  public async getAuthorizationRequest(req: Request, res: Response): Promise<void> {
     try {
-      const { userAddress } = req.params;
+      const { requestId } = req.params;
       
-      if (!userAddress) {
-        res.status(400).json({
-          success: false,
-          error: 'User address is required'
-        });
+      if (!requestId) {
+        this.sendError(res, 'Request ID is required', 400);
         return;
       }
 
-      console.log(`📋 Getting authorization requests for user: ${userAddress}`);
+      console.log(`🔍 [AUTH] Getting request: ${requestId}`);
 
-      // For demo purposes, return the existing request if it matches
-      // In production, this would query a database of pending requests
-      const testRequestId = '0xca2dbc2e59f35556d80d821d3c29a949ee1f4e9f15eb193e5fcf46143d92ac62';
+      const request = await this.authService.getAuthorizationRequest(requestId);
       
-      try {
-        const requestDetails = await this.authService.getAuthorizationRequest(testRequestId);
-        
-        if (requestDetails && 
-            requestDetails.userAddress.toLowerCase() === userAddress.toLowerCase() &&
-            requestDetails.status === 'pending') {
-          
-          const mockRequest = {
-            requestId: testRequestId,
-            userAddress: requestDetails.userAddress,
-            authToken: requestDetails.authToken,
-            creditCost: requestDetails.creditCost,
-            expiresAt: requestDetails.expiresAt,
-            emailData: {
-              from: 'wallet-creation-test@example.com',
-              subject: 'Complete DATA_WALLET Creation Test',
-              date: '2025-09-13T21:00:00.000Z',
-              attachmentCount: 0
-            },
-            ipfsHash: 'QmcYpsKJechgFb8Evd9DKZhLrfs1b4YPv75QSxjs1tJZu5',
-            ipfsUrl: 'https://rootz.digital/ipfs/QmcYpsKJechgFb8Evd9DKZhLrfs1b4YPv75QSxjs1tJZu5'
-          };
-
-          res.json({
-            success: true,
-            requests: [mockRequest]
-          });
-        } else {
-          res.json({
-            success: true,
-            requests: []
-          });
-        }
-      } catch (error) {
-        console.log('No pending requests found for user');
-        res.json({
-          success: true,
-          requests: []
-        });
+      if (!request) {
+        this.sendError(res, 'Authorization request not found', 404);
+        return;
       }
 
-    } catch (error: any) {
-      console.error('Failed to get authorization requests:', error);
-      res.status(500).json({
-        success: false,
-        error: error?.message || 'Failed to get authorization requests'
-      });
+      console.log(`✅ [AUTH] Request found: ${request.status}`);
+      
+      this.sendResponse(res, request);
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Get request error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get authorization request';
+      this.sendError(res, errorMessage, 500);
     }
   }
 
   /**
-   * Process user authorization signature
+   * Get authorization request by auth token
    */
-  async processUserAuthorization(req: Request, res: Response): Promise<void> {
+  public async getAuthorizationRequestByToken(req: Request, res: Response): Promise<void> {
     try {
-      const { requestId, signature, userAddress } = req.body;
+      const { authToken } = req.params;
       
-      if (!requestId || !signature || !userAddress) {
-        res.status(400).json({
-          success: false,
-          error: 'requestId, signature, and userAddress are required'
-        });
+      if (!authToken) {
+        this.sendError(res, 'Auth token is required', 400);
         return;
       }
 
-      console.log(`🔐 Processing user authorization:`);
+      console.log(`🔍 [AUTH] Getting request by token: ${authToken}`);
+
+      const request = await this.authService.getAuthorizationRequestByToken(authToken);
+      
+      if (!request) {
+        this.sendError(res, 'Authorization request not found', 404);
+        return;
+      }
+
+      console.log(`✅ [AUTH] Request found by token: ${request.status}`);
+      
+      this.sendResponse(res, request);
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Get request by token error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get authorization request';
+      this.sendError(res, errorMessage, 500);
+    }
+  }
+
+  /**
+   * Handle user authorization of email wallet creation
+   * This endpoint coordinates the user's MetaMask transaction
+   */
+  public async authorizeEmailWallet(req: Request, res: Response): Promise<void> {
+    try {
+      const { requestId, userAddress, signature } = req.body;
+      
+      if (!requestId || !userAddress || !signature) {
+        this.sendError(res, 'Missing required fields: requestId, userAddress, signature', 400);
+        return;
+      }
+
+      console.log(`🔐 [AUTH] Processing authorization:`);
       console.log(`   Request ID: ${requestId}`);
       console.log(`   User: ${userAddress}`);
       console.log(`   Signature: ${signature.substring(0, 20)}...`);
 
-      // Verify request exists and belongs to user
-      const requestDetails = await this.authService.getAuthorizationRequest(requestId);
+      // Validate the authorization request
+      const request = await this.authService.getAuthorizationRequest(requestId);
       
-      if (!requestDetails) {
-        res.status(404).json({
-          success: false,
-          error: 'Authorization request not found'
-        });
+      if (!request) {
+        this.sendError(res, 'Authorization request not found', 404);
         return;
       }
 
-      if (requestDetails.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
-        res.status(403).json({
-          success: false,
-          error: 'Request does not belong to this user'
-        });
+      if (request.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        this.sendError(res, 'Request belongs to different user', 403);
         return;
       }
 
-      if (requestDetails.status !== 'pending') {
-        res.status(400).json({
-          success: false,
-          error: `Request status is ${requestDetails.status}, not pending`
-        });
+      if (request.status !== 'pending') {
+        this.sendError(res, `Request status is ${request.status}, cannot authorize`, 400);
         return;
       }
 
-      // Process the user's authorization signature
-      // Note: This is where the service wallet takes the user's signature and submits it
-      const result = await this.submitUserAuthorizationToBlockchain(requestId, signature);
+      // Check if request is still valid (not expired)
+      const isValid = await this.authService.isRequestValid(requestId);
+      if (!isValid) {
+        this.sendError(res, 'Authorization request has expired', 400);
+        return;
+      }
 
+      console.log(`✅ [AUTH] Request validation passed`);
+
+      // Return instructions for user to call contract directly
+      // The user must call authorizeEmailWalletCreation() from their MetaMask
+      const contractAddress = this.authService['authContract'].address;
+      
+      this.sendResponse(res, {
+        success: true,
+        message: 'User must call contract function directly through MetaMask',
+        instructions: {
+          contractAddress: contractAddress,
+          functionName: 'authorizeEmailWalletCreation',
+          parameters: [requestId, signature],
+          network: 'Polygon Amoy (Chain ID: 80002)'
+        },
+        nextStep: 'Call the contract function from your connected wallet'
+      });
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Authorization error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Authorization failed';
+      this.sendError(res, errorMessage, 500);
+    }
+  }
+
+  /**
+   * Get user's authorization requests
+   */
+  public async getUserRequests(req: Request, res: Response): Promise<void> {
+    try {
+      const { userAddress } = req.params;
+      
+      if (!userAddress) {
+        this.sendError(res, 'User address is required', 400);
+        return;
+      }
+
+      console.log(`👤 [AUTH] Getting requests for user: ${userAddress}`);
+
+      const requestIds = await this.authService.getUserRequests(userAddress);
+      
+      // Get full request details for each ID
+      const requests = await Promise.all(
+        requestIds.map(async (id) => {
+          try {
+            return await this.authService.getAuthorizationRequest(id);
+          } catch (error) {
+            console.warn(`Failed to get request details for ${id}:`, error);
+            return null;
+          }
+        })
+      );
+
+      // Filter out null results
+      const validRequests = requests.filter(req => req !== null);
+
+      console.log(`✅ [AUTH] Found ${validRequests.length} requests for user`);
+      
+      this.sendResponse(res, {
+        userAddress,
+        requests: validRequests,
+        totalCount: validRequests.length
+      });
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Get user requests error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get user requests';
+      this.sendError(res, errorMessage, 500);
+    }
+  }
+
+  /**
+   * Cancel authorization request
+   */
+  public async cancelRequest(req: Request, res: Response): Promise<void> {
+    try {
+      const { requestId } = req.body;
+      
+      if (!requestId) {
+        this.sendError(res, 'Request ID is required', 400);
+        return;
+      }
+
+      console.log(`🚫 [AUTH] Cancelling request: ${requestId}`);
+
+      const result = await this.authService.cancelRequest(requestId);
+      
       if (result.success) {
-        res.json({
+        console.log(`✅ [AUTH] Request cancelled successfully`);
+        this.sendResponse(res, {
           success: true,
-          message: 'Authorization processed successfully',
-          transactionHash: result.transactionHash,
-          requestId
+          message: 'Authorization request cancelled',
+          requestId,
+          transactionHash: result.authorizationTx
         });
       } else {
-        res.status(500).json({
-          success: false,
-          error: result.error || 'Failed to process authorization'
-        });
+        throw new Error(result.error || 'Failed to cancel request');
       }
-
-    } catch (error: any) {
-      console.error('Failed to process user authorization:', error);
-      res.status(500).json({
-        success: false,
-        error: error?.message || 'Failed to process authorization'
-      });
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Cancel request error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel request';
+      this.sendError(res, errorMessage, 500);
     }
   }
 
   /**
-   * Submit user authorization to blockchain (service wallet pays gas)
+   * Process authorized request (create email wallet)
+   * This is called after user has authorized the request
    */
-  private async submitUserAuthorizationToBlockchain(requestId: string, userSignature: string) {
+  public async processAuthorizedRequest(req: Request, res: Response): Promise<void> {
     try {
-      console.log(`📤 Service wallet submitting user authorization to blockchain...`);
+      const { requestId, emailData, ipfsHash } = req.body;
       
-      // Get contract instance with service wallet
-      const { ethers } = require('ethers');
-      const provider = new ethers.providers.JsonRpcProvider(
-        this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/')
-      );
-      
-      const serviceWallet = new ethers.Wallet(
-        this.config.get('blockchain.serviceWalletPrivateKey'),
-        provider
-      );
-
-      const contractAddress = this.config.get('blockchain.contractAuthorization');
-      const authABI = [
-        "function authorizeEmailWalletCreation(bytes32 requestId, bytes signature) external"
-      ];
-
-      const authContract = new ethers.Contract(contractAddress, authABI, serviceWallet);
-
-      // Service wallet submits user's signature to blockchain
-      const tx = await authContract.authorizeEmailWalletCreation(
-        requestId,
-        userSignature,
-        {
-          gasLimit: 500000,
-          gasPrice: ethers.utils.parseUnits('30', 'gwei')
-        }
-      );
-
-      console.log(`   Transaction: ${tx.hash}`);
-      console.log(`   Gas paid by service wallet: ${serviceWallet.address}`);
-
-      const receipt = await tx.wait();
-      console.log(`   ✅ Authorization processed in block ${receipt.blockNumber}`);
-
-      if (receipt.status === 0) {
-        throw new Error('Transaction failed');
-      }
-
-      return {
-        success: true,
-        transactionHash: tx.hash
-      };
-
-    } catch (error: any) {
-      console.error('Failed to submit authorization to blockchain:', error);
-      return {
-        success: false,
-        error: error?.message || 'Blockchain submission failed'
-      };
-    }
-  }
-
-  /**
-   * Reject authorization request
-   */
-  async rejectRequest(req: Request, res: Response): Promise<void> {
-    try {
-      const { requestId, userAddress } = req.body;
-      
-      if (!requestId || !userAddress) {
-        res.status(400).json({
-          success: false,
-          error: 'requestId and userAddress are required'
-        });
+      if (!requestId || !emailData || !ipfsHash) {
+        this.sendError(res, 'Missing required fields: requestId, emailData, ipfsHash', 400);
         return;
       }
 
-      console.log(`❌ User rejecting request: ${requestId}`);
+      console.log(`🔄 [AUTH] Processing authorized request: ${requestId}`);
 
-      // In production, this would update the request status in database
-      res.json({
-        success: true,
-        message: 'Request rejected successfully'
-      });
+      // Verify request is authorized
+      const request = await this.authService.getAuthorizationRequest(requestId);
+      
+      if (!request) {
+        this.sendError(res, 'Authorization request not found', 404);
+        return;
+      }
 
-    } catch (error: any) {
-      console.error('Failed to reject request:', error);
-      res.status(500).json({
-        success: false,
-        error: error?.message || 'Failed to reject request'
+      if (request.status !== 'authorized') {
+        this.sendError(res, `Request must be authorized first. Current status: ${request.status}`, 400);
+        return;
+      }
+
+      // Process the request
+      const result = await this.authService.processAuthorizedRequest(requestId, emailData, ipfsHash);
+      
+      if (result.success) {
+        console.log(`✅ [AUTH] Email wallet created successfully`);
+        this.sendResponse(res, {
+          success: true,
+          message: 'Email wallet created successfully',
+          emailWalletId: result.emailWalletId,
+          attachmentWalletIds: result.attachmentWalletIds,
+          creditsUsed: result.totalCreditsUsed
+        });
+      } else {
+        throw new Error(result.error || 'Failed to process request');
+      }
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Process request error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process authorized request';
+      this.sendError(res, errorMessage, 500);
+    }
+  }
+
+  /**
+   * Check authorization service health
+   */
+  public async getHealthStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const health = await this.authService.healthCheck();
+      
+      this.sendResponse(res, {
+        service: 'AuthorizationService',
+        healthy: health.healthy,
+        details: health.details
       });
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Health check error:', error);
+      this.sendError(res, 'Health check failed', 500);
+    }
+  }
+
+  /**
+   * Serve authorization page
+   */
+  public async serveAuthorizationPage(req: Request, res: Response): Promise<void> {
+    try {
+      const { requestId, authToken } = req.query;
+      
+      if (!requestId && !authToken) {
+        res.status(400).send('Missing authorization parameters');
+        return;
+      }
+
+      // Serve the authorization HTML page
+      res.sendFile('authorization.html', { 
+        root: __dirname + '/../client',
+        headers: {
+          'Content-Type': 'text/html'
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ [AUTH] Serve page error:', error);
+      res.status(500).send('Failed to load authorization page');
     }
   }
 }

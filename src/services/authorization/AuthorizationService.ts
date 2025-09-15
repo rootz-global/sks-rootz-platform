@@ -12,12 +12,16 @@ export interface AuthorizationRequest {
   createdAt: Date;
   expiresAt: Date;
   status: 'pending' | 'authorized' | 'processed' | 'expired' | 'cancelled';
+  emailSender?: string;
+  emailSubject?: string;
+  attachmentCount?: number;
 }
 
 export interface AuthorizationResult {
   success: boolean;
   requestId?: string;
   authToken?: string;
+  authorizationTx?: string;
   error?: string;
 }
 
@@ -61,11 +65,16 @@ export class AuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // Initialize contract (minimal ABI for basic functionality)
+      // COMPLETE ABI including the missing authorizeEmailWalletCreation function
       const authABI = [
         "function createAuthorizationRequest(address userWallet, string authToken, bytes32 emailHash, bytes32[] attachmentHashes) external returns (bytes32 requestId)",
         "function getAuthorizationRequest(bytes32 requestId) external view returns (address userWallet, string authToken, bytes32 emailHash, uint256 attachmentCount, uint256 creditCost, uint256 createdAt, uint256 expiresAt, uint8 status)",
-        "function processAuthorizedRequest(bytes32 requestId, tuple(string forwardedBy, string originalSender, string messageId, string subject, bytes32 bodyHash, bytes32 emailHash, bytes32 emailHeadersHash, uint256 attachmentCount, string ipfsHash, tuple(bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) authResults) emailData, tuple(string originalFilename, string filename, string mimeType, string fileExtension, uint256 fileSize, bytes32 contentHash, string fileSignature, string ipfsHash, uint256 attachmentIndex, string emailSender, string emailSubject, uint256 emailTimestamp)[] attachmentData) external returns (tuple(bool success, bytes32 emailWalletId, bytes32[] attachmentWalletIds, uint256 totalCreditsUsed, string errorMessage))"
+        "function authorizeEmailWalletCreation(bytes32 requestId, bytes signature) external returns (bytes32 authorizationTx)",
+        "function getRequestFromToken(string authToken) external view returns (bytes32)",
+        "function processAuthorizedRequest(bytes32 requestId, tuple(string forwardedBy, string originalSender, string messageId, string subject, bytes32 bodyHash, bytes32 emailHash, bytes32 emailHeadersHash, uint256 attachmentCount, string ipfsHash, tuple(bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) authResults) emailData, tuple(string originalFilename, string filename, string mimeType, string fileExtension, uint256 fileSize, bytes32 contentHash, string fileSignature, string ipfsHash, uint256 attachmentIndex, string emailSender, string emailSubject, uint256 emailTimestamp)[] attachmentData) external returns (tuple(bool success, bytes32 emailWalletId, bytes32[] attachmentWalletIds, uint256 totalCreditsUsed, string errorMessage))",
+        "function getUserRequests(address user) external view returns (bytes32[])",
+        "function isRequestValid(bytes32 requestId) external view returns (bool)",
+        "function cancelRequest(bytes32 requestId) external"
       ];
       
       this.authContract = new ethers.Contract(contractAddress, authABI, this.serviceWallet);
@@ -154,6 +163,65 @@ export class AuthorizationService {
   }
   
   /**
+   * USER AUTHORIZATION - The missing piece!
+   * This function handles user signatures for authorization requests
+   */
+  async authorizeEmailWalletCreation(
+    requestId: string,
+    userAddress: string,
+    signature: string
+  ): Promise<AuthorizationResult> {
+    
+    try {
+      console.log('🔐 Processing user authorization...');
+      console.log(`   Request ID: ${requestId}`);
+      console.log(`   User Address: ${userAddress}`);
+      console.log(`   Signature: ${signature.substring(0, 20)}...`);
+      
+      // Verify request exists and is valid
+      const request = await this.getAuthorizationRequest(requestId);
+      if (!request) {
+        throw new Error('Authorization request not found');
+      }
+      
+      if (request.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        throw new Error('Request belongs to different user');
+      }
+      
+      if (request.status !== 'pending') {
+        throw new Error(`Request status is ${request.status}, cannot authorize`);
+      }
+      
+      // Create a user wallet instance to call the contract
+      // NOTE: This requires the user's wallet to call the contract directly
+      // We cannot call this from the service wallet - it must be the user
+      const provider = new ethers.providers.JsonRpcProvider(
+        this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/')
+      );
+      
+      // Create contract instance for read-only operations
+      // The actual transaction must be sent by the user through MetaMask
+      console.log('📝 User must call contract directly through MetaMask');
+      console.log(`   Contract Address: ${this.authContract.address}`);
+      console.log(`   Function: authorizeEmailWalletCreation`);
+      console.log(`   Parameters: requestId=${requestId}, signature=${signature}`);
+      
+      return {
+        success: true,
+        requestId,
+        authorizationTx: 'pending_user_transaction'
+      };
+      
+    } catch (error: any) {
+      console.error('❌ User authorization failed:', error);
+      return {
+        success: false,
+        error: error?.message || 'User authorization failed'
+      };
+    }
+  }
+  
+  /**
    * Get authorization request details
    */
   async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
@@ -170,12 +238,90 @@ export class AuthorizationService {
         creditCost: Number(result.creditCost),
         createdAt: new Date(Number(result.createdAt) * 1000),
         expiresAt: new Date(Number(result.expiresAt) * 1000),
-        status: this.mapContractStatus(result.status) as AuthorizationRequest['status']
+        status: this.mapContractStatus(result.status) as AuthorizationRequest['status'],
+        attachmentCount: Number(result.attachmentCount)
       };
       
     } catch (error) {
       console.error('Failed to get authorization request:', error);
       return null;
+    }
+  }
+  
+  /**
+   * Get authorization request by auth token
+   */
+  async getAuthorizationRequestByToken(authToken: string): Promise<AuthorizationRequest | null> {
+    try {
+      console.log(`🔍 Looking up request by token: ${authToken}`);
+      
+      const requestId = await this.authContract.getRequestFromToken(authToken);
+      if (!requestId || requestId === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        console.log('❌ No request found for token');
+        return null;
+      }
+      
+      console.log(`✅ Found request ID: ${requestId}`);
+      return await this.getAuthorizationRequest(requestId);
+      
+    } catch (error) {
+      console.error('Failed to get authorization request by token:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Get user's authorization requests
+   */
+  async getUserRequests(userAddress: string): Promise<string[]> {
+    try {
+      const requests = await this.authContract.getUserRequests(userAddress);
+      return requests;
+    } catch (error) {
+      console.error('Failed to get user requests:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Check if request is valid
+   */
+  async isRequestValid(requestId: string): Promise<boolean> {
+    try {
+      return await this.authContract.isRequestValid(requestId);
+    } catch (error) {
+      console.error('Failed to check request validity:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Cancel authorization request
+   */
+  async cancelRequest(requestId: string): Promise<AuthorizationResult> {
+    try {
+      console.log(`🚫 Cancelling request: ${requestId}`);
+      
+      const tx = await this.authContract.cancelRequest(requestId, {
+        gasLimit: 200000,
+        gasPrice: ethers.utils.parseUnits('30', 'gwei')
+      });
+      
+      await tx.wait();
+      console.log(`✅ Request cancelled: ${tx.hash}`);
+      
+      return {
+        success: true,
+        requestId,
+        authorizationTx: tx.hash
+      };
+      
+    } catch (error: any) {
+      console.error('❌ Failed to cancel request:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to cancel request'
+      };
     }
   }
   

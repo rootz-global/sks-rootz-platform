@@ -7,6 +7,7 @@ import { StatusController } from './controllers/StatusController';
 import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 import testRoutes from './routes/testRoutes';
+import authorizationRoutes from './routes/authorizationRoutes';
 import EmailMonitoringController from './controllers/EmailMonitoringController';
 import { DataWalletMintingService } from './services/DataWalletMintingService';
 import { BlockchainEventMonitor } from './services/BlockchainEventMonitor';
@@ -157,9 +158,6 @@ export class RootzPlatform {
     router.post('/email-wallet/register', emailWalletController.register.bind(emailWalletController));
     router.get('/email-wallet/balance/:address', emailWalletController.getBalance.bind(emailWalletController));
     
-    // Legacy email monitoring routes REMOVED - using integrated monitoring instead
-    // Old routes disabled to prevent conflicts with new integrated system
-
     // Wallet proposal routes (NEW)
     router.post('/email-wallet/propose', emailWalletController.createWalletProposal.bind(emailWalletController));
     router.post('/email-wallet/authorize', emailWalletController.authorizeWallet.bind(emailWalletController));
@@ -190,6 +188,16 @@ export class RootzPlatform {
       console.error('❌ Failed to initialize Email Processing routes:', error);
     }
 
+    // AUTHORIZATION ROUTES (NEW) - User Authorization Flow
+    console.log('🔐 Initializing Authorization routes...');
+    try {
+      router.use('/authorization', authorizationRoutes);
+      console.log('✅ Authorization routes initialized');
+      console.log('   Available at: /.rootz/authorization/*');
+    } catch (error) {
+      console.error('❌ Failed to initialize Authorization routes:', error);
+    }
+
     // TEST ROUTES - DATA_WALLET Creation Testing
     console.log('🧪 Initializing Test routes...');
     router.use('/test', testRoutes);
@@ -197,13 +205,10 @@ export class RootzPlatform {
     console.log('   Available at: /.rootz/test/*');
 
     // Serve authorization page (static HTML)
-    router.get('/authorization', (req: Request, res: Response) => {
-      res.sendFile(path.join(__dirname, '..', 'public', 'authorization.html'));
+    router.get('/authorize', (req: Request, res: Response) => {
+      res.sendFile(path.join(__dirname, 'client', 'authorization.html'));
     });
     
-    // Serve static files for authorization interface
-    router.use('/public', express.static(path.join(__dirname, '..', 'public')));
-
     // Client library serving (EPISTERY pattern)
     router.get('/lib/client.js', (req: Request, res: Response) => {
       res.setHeader('Content-Type', 'application/javascript');
@@ -275,6 +280,31 @@ class RootzClient {
 
   async getEmailProcessingHealth() {
     const response = await fetch(\`\${this.baseUrl}/.rootz/email-processing/health\`);
+    return response.json();
+  }
+
+  // NEW: Authorization Methods
+  async getAuthorizationRequest(requestId) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/authorization/request/\${requestId}\`);
+    return response.json();
+  }
+
+  async getAuthorizationRequestByToken(authToken) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/authorization/token/\${authToken}\`);
+    return response.json();
+  }
+
+  async authorizeEmailWallet(requestId, userAddress, signature) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/authorization/authorize\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, userAddress, signature })
+    });
+    return response.json();
+  }
+
+  async getUserRequests(userAddress) {
+    const response = await fetch(\`\${this.baseUrl}/.rootz/authorization/user/\${userAddress}/requests\`);
     return response.json();
   }
 }
