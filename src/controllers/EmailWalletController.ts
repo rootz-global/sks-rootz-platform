@@ -79,16 +79,13 @@ export class EmailWalletController extends Controller {
       
       console.log(`📝 [REGISTER] Extracted email from signed message: ${userEmail}`);
 
-      // Register user with the verified email from signed message
-      const success = await this.blockchainService.registerEmailWallet(validAddress, userEmail);
+      // Register user with the verified email from signed message (unified contract)
+      const result = await this.blockchainService.registerUser(validAddress, userEmail, signature, message);
       
-      if (!success) {
+      if (!result || !result.success) {
         this.sendError(res, 'Registration failed', 500);
         return;
       }
-
-      // Deposit initial credits
-      await this.blockchainService.depositCredits(validAddress, "0.006");
 
       console.log(`✅ [REGISTER] User ${validAddress} registered successfully`);
       
@@ -96,6 +93,8 @@ export class EmailWalletController extends Controller {
         success: true,
         userAddress: validAddress,
         email: userEmail,
+        transactionHash: result.transactionHash,
+        userId: result.userId,
         initialCredits: 60,
         message: 'User registered successfully'
       });
@@ -364,17 +363,20 @@ export class EmailWalletController extends Controller {
       const credits = await this.blockchainService.getUserCredits(validAddress);
       const userRegistration = await this.blockchainService.getUserRegistration(validAddress);
       
-      // TODO: Add pending proposals, created wallets, etc.
+      // Get user's email wallets
+      const userWallets = await this.blockchainService.getAllUserWallets(validAddress);
       
       this.sendResponse(res, {
         user: {
           address: validAddress,
           credits,
-          registrationDate: userRegistration?.registeredAt ? new Date(userRegistration.registeredAt * 1000).toISOString() : null,
-          registrationId: userRegistration?.registrationId
+          registrationDate: userRegistration?.registeredAt ? userRegistration.registeredAt.toISOString() : null,
+          userId: userRegistration?.userId,
+          email: userRegistration?.email
         },
+        wallets: userWallets,
+        walletCount: userWallets.length,
         pendingProposals: [], // TODO: Implement
-        createdWallets: [], // TODO: Implement
         recentActivity: [] // TODO: Implement
       });
       
@@ -385,41 +387,41 @@ export class EmailWalletController extends Controller {
     }
   }
 
-  // Test blockchain write capability - ENHANCED FOR NEW CONTRACT
+  // Test blockchain functionality - UPDATED FOR UNIFIED CONTRACT
   public async testBlockchainWrite(req: Request, res: Response): Promise<void> {
     try {
-      console.log(`[TEST] Starting enhanced blockchain write test`);
+      console.log(`[TEST] Starting unified blockchain test`);
       
       this.initializeServices(req);
       
-      // Test basic write capability
-      const basicWriteSuccess = await this.blockchainService.testBlockchainWrite();
-      console.log(`[TEST] Basic blockchain write test: ${basicWriteSuccess}`);
+      // Test health check
+      const healthResult = await this.blockchainService.healthCheck();
+      console.log(`[TEST] Health check result:`, healthResult);
       
-      // Test new enhanced contract functions
-      let enhancedContractTest = false;
+      // Test user queries
+      let userQueryTest = false;
       try {
-        // Test getting user email wallets (should work even if user has 0 wallets)
         const testUserAddress = '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b';
-        const userWallets = await this.blockchainService.getUserEmailWallets(testUserAddress);
-        const activeWalletCount = await this.blockchainService.getActiveWalletCount(testUserAddress);
+        const isRegistered = await this.blockchainService.isUserRegistered(testUserAddress);
+        const credits = await this.blockchainService.getUserCredits(testUserAddress);
+        const userWallets = await this.blockchainService.getAllUserWallets(testUserAddress);
         
-        console.log(`[TEST] Enhanced contract test - User wallets: ${userWallets.length}, Active: ${activeWalletCount}`);
-        enhancedContractTest = true;
-      } catch (enhancedError) {
-        console.error(`[TEST] Enhanced contract test failed:`, enhancedError);
-        enhancedContractTest = false;
+        console.log(`[TEST] User query test - Registered: ${isRegistered}, Credits: ${credits}, Wallets: ${userWallets.length}`);
+        userQueryTest = true;
+      } catch (queryError) {
+        console.error(`[TEST] User query test failed:`, queryError);
+        userQueryTest = false;
       }
       
-      const overallSuccess = basicWriteSuccess && enhancedContractTest;
+      const overallSuccess = healthResult.status === 'healthy' && userQueryTest;
       
       const result = {
-        blockchainWriteTest: overallSuccess,
-        basicWrite: basicWriteSuccess,
-        enhancedContract: enhancedContractTest,
+        blockchainTest: overallSuccess,
+        healthCheck: healthResult,
+        userQueries: userQueryTest,
         timestamp: new Date().toISOString(),
         message: overallSuccess 
-          ? 'Enhanced blockchain integration working correctly' 
+          ? 'Unified blockchain integration working correctly' 
           : 'Blockchain integration test failed - check logs for details'
       };
       
@@ -427,8 +429,8 @@ export class EmailWalletController extends Controller {
       this.sendResponse(res, result);
       
     } catch (error) {
-      console.error('[TEST] Blockchain write test error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Blockchain write test failed';
+      console.error('[TEST] Blockchain test error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Blockchain test failed';
       this.sendError(res, errorMessage, 500);
     }
   }

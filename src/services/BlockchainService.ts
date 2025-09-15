@@ -438,7 +438,4 @@ export class BlockchainService {
     }
 }
 
-/**
- * EXPORT FOR USE IN APPLICATION
- */
-export { BlockchainService };
+// Export is handled by the class declaration above
