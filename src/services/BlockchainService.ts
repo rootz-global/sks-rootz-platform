@@ -90,10 +90,10 @@ export class BlockchainService {
 
     // EmailDataWallet ABI (Enhanced Contract)
     const emailDataWalletABI = [
-      "function getUserEmailWallets(address user) view returns (bytes32[] memory)",
+      "function getAllUserWallets(address user) view returns (bytes32[] memory)",
       "function getActiveWalletCount(address user) view returns (uint256)",
-      "function getEmailWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
-      "function createEmailWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)"
+      "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
+      "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)"
     ];
 
     // Get contract addresses
@@ -227,7 +227,7 @@ export class BlockchainService {
       }
       
       const validAddress = this.validateAndFormatAddress(userAddress);
-      const wallets = await this.contracts.emailDataWallet.getUserEmailWallets(validAddress);
+      const wallets = await this.contracts.emailDataWallet.getAllUserWallets(validAddress);
       console.log(`📧 User ${validAddress} has ${wallets.length} email wallets`);
       return wallets;
     } catch (error) {
@@ -388,7 +388,7 @@ export class BlockchainService {
       const gasPricing = await this.getGasPricing();
       const contentHashBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(contentHash));
 
-      const tx = await this.contracts.emailDataWallet.createEmailWallet(
+      const tx = await this.contracts.emailDataWallet.createEmailDataWallet(
         validAddress,
         subject,
         sender,
@@ -448,7 +448,7 @@ export class BlockchainService {
         return null;
       }
 
-      const wallet = await this.contracts.emailDataWallet.getEmailWallet(walletId);
+      const wallet = await this.contracts.emailDataWallet.getEmailDataWallet(walletId);
       
       return {
         walletId,
