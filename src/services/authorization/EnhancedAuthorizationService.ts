@@ -160,4 +160,293 @@ export class EnhancedAuthorizationService {
       )).substring(0, 18);
       
       // Create authorization request object
-      const authRequest: AuthorizationRequest = {\n        requestId,\n        userAddress,\n        authToken,\n        emailHash: emailData.emailHash,\n        attachmentHashes: emailData.attachments.map(att => att.contentHash),\n        creditCost: requiredCredits,\n        createdAt: new Date(),\n        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours\n        status: 'pending',\n        emailSender: emailData.from,\n        emailSubject: emailData.subject,\n        attachmentCount: emailData.attachments.length,\n        ipfsHash,\n        emailData\n      };\n      \n      // Store in memory (would be database in production)\n      this.authorizationRequests.set(requestId, authRequest);\n      this.tokenToRequestId.set(authToken, requestId);\n      \n      console.log(`✅ Enhanced authorization request created:`);\n      console.log(`   Request ID: ${requestId}`);\n      console.log(`   Auth Token: ${authToken}`);\n      \n      return {\n        success: true,\n        requestId,\n        authToken\n      };\n      \n    } catch (error: any) {\n      console.error('❌ Failed to create enhanced authorization request:', error);\n      return {\n        success: false,\n        error: error?.message || 'Failed to create authorization request'\n      };\n    }\n  }\n  \n  /**\n   * ENHANCED USER AUTHORIZATION - Direct wallet creation with signature verification\n   * This is the missing piece that solves the owner vs user problem!\n   */\n  async authorizeEmailWalletCreation(\n    requestId: string,\n    userAddress: string,\n    signature: string\n  ): Promise<AuthorizationResult> {\n    \n    try {\n      console.log('🔐 Processing enhanced user authorization...');\n      console.log(`   Request ID: ${requestId}`);\n      console.log(`   User Address: ${userAddress}`);\n      \n      // Get authorization request\n      const request = this.authorizationRequests.get(requestId);\n      if (!request) {\n        throw new Error('Authorization request not found');\n      }\n      \n      if (request.userAddress.toLowerCase() !== userAddress.toLowerCase()) {\n        throw new Error('Request belongs to different user');\n      }\n      \n      if (request.status !== 'pending') {\n        throw new Error(`Request status is ${request.status}, cannot authorize`);\n      }\n      \n      if (new Date() > request.expiresAt) {\n        request.status = 'expired';\n        throw new Error('Authorization request has expired');\n      }\n      \n      // Verify signature (user proving consent)\n      const messageHash = ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32'], [requestId]));\n      const expectedAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(messageHash), signature);\n      \n      if (expectedAddress.toLowerCase() !== userAddress.toLowerCase()) {\n        throw new Error('Invalid signature - signature does not match user address');\n      }\n      \n      console.log('✅ Signature verified - user consent proven');\n      \n      // ENHANCED FEATURE: Service creates EMAIL_DATA_WALLET directly\n      console.log('🔧 Creating EMAIL_DATA_WALLET using enhanced contract...');\n      \n      if (!request.emailData) {\n        throw new Error('Email data not found in request');\n      }\n      \n      // Deduct credits first\n      console.log(`💰 Deducting ${request.creditCost} credits from user...`);\n      const deductTx = await this.registrationContract.deductCredits(\n        userAddress,\n        request.creditCost,\n        {\n          gasLimit: 200000,\n          gasPrice: ethers.utils.parseUnits('30', 'gwei')\n        }\n      );\n      await deductTx.wait();\n      console.log(`✅ Credits deducted: ${deductTx.hash}`);\n      \n      // Create content hash\n      const contentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash));\n      \n      // Create EMAIL_DATA_WALLET on new enhanced contract\n      const createTx = await this.emailDataWalletContract.createEmailDataWallet(\n        userAddress,\n        request.emailData.subject,\n        request.emailData.from,\n        contentHash,\n        request.ipfsHash || '',\n        {\n          gasLimit: 300000,\n          gasPrice: ethers.utils.parseUnits('30', 'gwei')\n        }\n      );\n      \n      console.log(`⏳ EMAIL_DATA_WALLET creation transaction: ${createTx.hash}`);\n      \n      const receipt = await createTx.wait();\n      console.log(`✅ EMAIL_DATA_WALLET created in block ${receipt.blockNumber}`);\n      \n      // Extract wallet ID from transaction logs\n      const walletId = this.extractWalletIdFromReceipt(receipt);\n      \n      // Update request status\n      request.status = 'processed';\n      \n      console.log(`🎉 EMAIL_DATA_WALLET creation complete:`);\n      console.log(`   Wallet ID: ${walletId}`);\n      console.log(`   Transaction: ${createTx.hash}`);\n      \n      return {\n        success: true,\n        requestId,\n        emailWalletId: walletId,\n        authorizationTx: createTx.hash\n      };\n      \n    } catch (error: any) {\n      console.error('❌ Enhanced authorization failed:', error);\n      return {\n        success: false,\n        error: error?.message || 'Enhanced authorization failed'\n      };\n    }\n  }\n  \n  /**\n   * Get authorization request details\n   */\n  async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {\n    return this.authorizationRequests.get(requestId) || null;\n  }\n  \n  /**\n   * Get authorization request by auth token\n   */\n  async getAuthorizationRequestByToken(authToken: string): Promise<AuthorizationRequest | null> {\n    const requestId = this.tokenToRequestId.get(authToken);\n    if (!requestId) {\n      return null;\n    }\n    return this.getAuthorizationRequest(requestId);\n  }\n  \n  /**\n   * Get user's EMAIL_DATA_WALLETs from enhanced contract\n   */\n  async getUserEmailWallets(userAddress: string): Promise<string[]> {\n    try {\n      const wallets = await this.emailDataWalletContract.getAllUserWallets(userAddress);\n      console.log(`📧 User ${userAddress} has ${wallets.length} email wallets`);\n      return wallets;\n    } catch (error) {\n      console.error('❌ Error getting user email wallets:', error);\n      return [];\n    }\n  }\n  \n  /**\n   * Get EMAIL_DATA_WALLET details\n   */\n  async getEmailWalletDetails(walletId: string): Promise<any> {\n    try {\n      const wallet = await this.emailDataWalletContract.getEmailDataWallet(walletId);\n      \n      return {\n        walletId,\n        owner: wallet.owner,\n        subject: wallet.subject,\n        sender: wallet.sender,\n        timestamp: wallet.timestamp.toNumber(),\n        isActive: wallet.isActive,\n        contentHash: wallet.contentHash,\n        ipfsHash: wallet.ipfsHash\n      };\n    } catch (error) {\n      console.error('❌ Error getting email wallet details:', error);\n      return null;\n    }\n  }\n  \n  /**\n   * Cancel authorization request\n   */\n  async cancelRequest(requestId: string): Promise<AuthorizationResult> {\n    try {\n      const request = this.authorizationRequests.get(requestId);\n      if (!request) {\n        throw new Error('Request not found');\n      }\n      \n      if (request.status !== 'pending') {\n        throw new Error(`Cannot cancel request with status: ${request.status}`);\n      }\n      \n      request.status = 'cancelled';\n      \n      console.log(`🚫 Request cancelled: ${requestId}`);\n      \n      return {\n        success: true,\n        requestId\n      };\n      \n    } catch (error: any) {\n      console.error('❌ Failed to cancel request:', error);\n      return {\n        success: false,\n        error: error?.message || 'Failed to cancel request'\n      };\n    }\n  }\n  \n  /**\n   * Extract wallet ID from transaction receipt\n   */\n  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {\n    try {\n      for (const log of receipt.logs) {\n        if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {\n          // The wallet ID should be in the first topic (after event signature)\n          if (log.topics.length >= 2) {\n            return log.topics[1];\n          }\n        }\n      }\n      return null;\n    } catch (error) {\n      console.error('Failed to extract wallet ID from receipt:', error);\n      return null;\n    }\n  }\n  \n  /**\n   * Health check for enhanced authorization service\n   */\n  async healthCheck(): Promise<{ healthy: boolean; details: any }> {\n    try {\n      const balance = await this.provider.getBalance(this.serviceWallet.address);\n      const balanceInEth = ethers.utils.formatEther(balance);\n      const blockNumber = await this.provider.getBlockNumber();\n      \n      return {\n        healthy: parseFloat(balanceInEth) > 0.01,\n        details: {\n          serviceWallet: this.serviceWallet.address,\n          balance: `${balanceInEth} POL`,\n          blockNumber,\n          emailDataWalletContract: this.emailDataWalletContract.address,\n          registrationContract: this.registrationContract.address,\n          pendingRequests: this.authorizationRequests.size,\n          enhanced: true\n        }\n      };\n      \n    } catch (error: any) {\n      return {\n        healthy: false,\n        details: { error: error?.message || 'Unknown error' }\n      };\n    }\n  }\n}\n\nexport default EnhancedAuthorizationService;
+      const authRequest: AuthorizationRequest = {
+        requestId,
+        userAddress,
+        authToken,
+        emailHash: emailData.emailHash,
+        attachmentHashes: emailData.attachments.map(att => att.contentHash),
+        creditCost: requiredCredits,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        status: 'pending',
+        emailSender: emailData.from,
+        emailSubject: emailData.subject,
+        attachmentCount: emailData.attachments.length,
+        ipfsHash,
+        emailData
+      };
+      
+      // Store in memory (would be database in production)
+      this.authorizationRequests.set(requestId, authRequest);
+      this.tokenToRequestId.set(authToken, requestId);
+      
+      console.log(`✅ Enhanced authorization request created:`);
+      console.log(`   Request ID: ${requestId}`);
+      console.log(`   Auth Token: ${authToken}`);
+      
+      return {
+        success: true,
+        requestId,
+        authToken
+      };
+      
+    } catch (error: any) {
+      console.error('❌ Failed to create enhanced authorization request:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to create authorization request'
+      };
+    }
+  }
+  
+  /**
+   * ENHANCED USER AUTHORIZATION - Direct wallet creation with signature verification
+   * This is the missing piece that solves the owner vs user problem!
+   */
+  async authorizeEmailWalletCreation(
+    requestId: string,
+    userAddress: string,
+    signature: string
+  ): Promise<AuthorizationResult> {
+    
+    try {
+      console.log('🔐 Processing enhanced user authorization...');
+      console.log(`   Request ID: ${requestId}`);
+      console.log(`   User Address: ${userAddress}`);
+      
+      // Get authorization request
+      const request = this.authorizationRequests.get(requestId);
+      if (!request) {
+        throw new Error('Authorization request not found');
+      }
+      
+      if (request.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        throw new Error('Request belongs to different user');
+      }
+      
+      if (request.status !== 'pending') {
+        throw new Error(`Request status is ${request.status}, cannot authorize`);
+      }
+      
+      if (new Date() > request.expiresAt) {
+        request.status = 'expired';
+        throw new Error('Authorization request has expired');
+      }
+      
+      // Verify signature (user proving consent)
+      const messageHash = ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32'], [requestId]));
+      const expectedAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(messageHash), signature);
+      
+      if (expectedAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        throw new Error('Invalid signature - signature does not match user address');
+      }
+      
+      console.log('✅ Signature verified - user consent proven');
+      
+      // ENHANCED FEATURE: Service creates EMAIL_DATA_WALLET directly
+      console.log('🔧 Creating EMAIL_DATA_WALLET using enhanced contract...');
+      
+      if (!request.emailData) {
+        throw new Error('Email data not found in request');
+      }
+      
+      // Deduct credits first
+      console.log(`💰 Deducting ${request.creditCost} credits from user...`);
+      const deductTx = await this.registrationContract.deductCredits(
+        userAddress,
+        request.creditCost,
+        {
+          gasLimit: 200000,
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+        }
+      );
+      await deductTx.wait();
+      console.log(`✅ Credits deducted: ${deductTx.hash}`);
+      
+      // Create content hash
+      const contentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash));
+      
+      // Create EMAIL_DATA_WALLET on new enhanced contract
+      const createTx = await this.emailDataWalletContract.createEmailDataWallet(
+        userAddress,
+        request.emailData.subject,
+        request.emailData.from,
+        contentHash,
+        request.ipfsHash || '',
+        {
+          gasLimit: 300000,
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+        }
+      );
+      
+      console.log(`⏳ EMAIL_DATA_WALLET creation transaction: ${createTx.hash}`);
+      
+      const receipt = await createTx.wait();
+      console.log(`✅ EMAIL_DATA_WALLET created in block ${receipt.blockNumber}`);
+      
+      // Extract wallet ID from transaction logs
+      const walletId = this.extractWalletIdFromReceipt(receipt);
+      
+      // Update request status
+      request.status = 'processed';
+      
+      console.log(`🎉 EMAIL_DATA_WALLET creation complete:`);
+      console.log(`   Wallet ID: ${walletId}`);
+      console.log(`   Transaction: ${createTx.hash}`);
+      
+      return {
+        success: true,
+        requestId,
+        emailWalletId: walletId,
+        authorizationTx: createTx.hash
+      };
+      
+    } catch (error: any) {
+      console.error('❌ Enhanced authorization failed:', error);
+      return {
+        success: false,
+        error: error?.message || 'Enhanced authorization failed'
+      };
+    }
+  }
+  
+  /**
+   * Get authorization request details
+   */
+  async getAuthorizationRequest(requestId: string): Promise<AuthorizationRequest | null> {
+    return this.authorizationRequests.get(requestId) || null;
+  }
+  
+  /**
+   * Get authorization request by auth token
+   */
+  async getAuthorizationRequestByToken(authToken: string): Promise<AuthorizationRequest | null> {
+    const requestId = this.tokenToRequestId.get(authToken);
+    if (!requestId) {
+      return null;
+    }
+    return this.getAuthorizationRequest(requestId);
+  }
+  
+  /**
+   * Get user's EMAIL_DATA_WALLETs from enhanced contract
+   */
+  async getUserEmailWallets(userAddress: string): Promise<string[]> {
+    try {
+      const wallets = await this.emailDataWalletContract.getAllUserWallets(userAddress);
+      console.log(`📧 User ${userAddress} has ${wallets.length} email wallets`);
+      return wallets;
+    } catch (error) {
+      console.error('❌ Error getting user email wallets:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Get EMAIL_DATA_WALLET details
+   */
+  async getEmailWalletDetails(walletId: string): Promise<any> {
+    try {
+      const wallet = await this.emailDataWalletContract.getEmailDataWallet(walletId);
+      
+      return {
+        walletId,
+        owner: wallet.owner,
+        subject: wallet.subject,
+        sender: wallet.sender,
+        timestamp: wallet.timestamp.toNumber(),
+        isActive: wallet.isActive,
+        contentHash: wallet.contentHash,
+        ipfsHash: wallet.ipfsHash
+      };
+    } catch (error) {
+      console.error('❌ Error getting email wallet details:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Cancel authorization request
+   */
+  async cancelRequest(requestId: string): Promise<AuthorizationResult> {
+    try {
+      const request = this.authorizationRequests.get(requestId);
+      if (!request) {
+        throw new Error('Request not found');
+      }
+      
+      if (request.status !== 'pending') {
+        throw new Error(`Cannot cancel request with status: ${request.status}`);
+      }
+      
+      request.status = 'cancelled';
+      
+      console.log(`🚫 Request cancelled: ${requestId}`);
+      
+      return {
+        success: true,
+        requestId
+      };
+      
+    } catch (error: any) {
+      console.error('❌ Failed to cancel request:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to cancel request'
+      };
+    }
+  }
+  
+  /**
+   * Extract wallet ID from transaction receipt
+   */
+  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
+    try {
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {
+          // The wallet ID should be in the first topic (after event signature)
+          if (log.topics.length >= 2) {
+            return log.topics[1];
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to extract wallet ID from receipt:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Health check for enhanced authorization service
+   */
+  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+    try {
+      const balance = await this.provider.getBalance(this.serviceWallet.address);
+      const balanceInEth = ethers.utils.formatEther(balance);
+      const blockNumber = await this.provider.getBlockNumber();
+      
+      return {
+        healthy: parseFloat(balanceInEth) > 0.01,
+        details: {
+          serviceWallet: this.serviceWallet.address,
+          balance: `${balanceInEth} POL`,
+          blockNumber,
+          emailDataWalletContract: this.emailDataWalletContract.address,
+          registrationContract: this.registrationContract.address,
+          pendingRequests: this.authorizationRequests.size,
+          enhanced: true
+        }
+      };
+      
+    } catch (error: any) {
+      return {
+        healthy: false,
+        details: { error: error?.message || 'Unknown error' }
+      };
+    }
+  }
+}
+
+export default EnhancedAuthorizationService;
