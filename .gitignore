@@ -103,3 +103,5 @@ temp/
 # Yarn Integrity file
 .yarn-integrity
 "node_modules/" 
+"config/localhost/config.ini" 
+"config/*/config.ini" 

@@ -1,509 +1,444 @@
-// SKS Rootz Platform - Blockchain Service (EPISTERY Pattern) - FIXED
+// UNIFIED BLOCKCHAIN SERVICE - Complete Rewrite for EmailDataWalletOS_Secure
+// File: src/services/BlockchainService.ts
+// Version: 3.0 - Unified Contract Architecture
+// Date: September 15, 2025
 
 import { ethers } from 'ethers';
+import { ConfigService } from './ConfigService';
 
+/**
+ * UNIFIED BLOCKCHAIN SERVICE
+ * 
+ * This service uses the new EmailDataWalletOS_Secure contract that handles all functionality:
+ * - User Registration
+ * - Credit Management  
+ * - Email Data Wallet Creation
+ * - Authorization Flow
+ * - Lifecycle Management
+ */
 export class BlockchainService {
-  private provider: ethers.providers.JsonRpcProvider;
-  private serviceWallet: ethers.Wallet | null = null;
-  private contracts: { [key: string]: ethers.Contract } = {};
-  private config: any;
+    private provider: ethers.providers.JsonRpcProvider;
+    private serviceWallet: ethers.Wallet;
+    private unifiedContract: ethers.Contract;
+    private config: ConfigService;
 
-  constructor(domainConfig: any) {
-    // Use domain configuration from INI files (EPISTERY pattern)
-    this.config = domainConfig || this.getDefaultConfig();
-    
-    const rpcUrl = this.getConfigValue('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
-    this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-    
-    this.initializeServiceWallet();
-    this.initializeContracts();
-  }
-
-  /**
-   * Helper method to get config values from either Config instance or raw object
-   */
-  private getConfigValue(key: string): string | undefined {
-    // Check if config has a get() method (Config instance)
-    if (this.config && typeof this.config.get === 'function') {
-      return this.config.get(key);
-    }
-    
-    // Handle raw config object (legacy)
-    if (key.includes('.')) {
-      const parts = key.split('.');
-      let value = this.config;
-      for (const part of parts) {
-        if (value && typeof value === 'object' && part in value) {
-          value = value[part];
-        } else {
-          return undefined;
-        }
-      }
-      return typeof value === 'string' ? value : undefined;
-    }
-    
-    return this.config[key];
-  }
-
-  private getDefaultConfig(): any {
-    // Default configuration for localhost domain
-    return {
-      blockchain: {
-        rpcUrl: 'https://rpc-amoy.polygon.technology/',
-        serviceWalletPrivateKey: process.env.SERVICE_WALLET_PRIVATE_KEY || '',
-        contracts: {
-          registration: '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F'
-        }
-      }
-    };
-  }
-
-  private initializeServiceWallet(): void {
-    const privateKey = this.getConfigValue('blockchain.serviceWalletPrivateKey') || 
-                      this.getConfigValue('blockchain.privateKey');
-    
-    if (privateKey && privateKey !== 'YOUR_PRIVATE_KEY_HERE' && privateKey.length > 10) {
-      try {
-        this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
-        console.log(`🔑 Blockchain service wallet initialized: ${this.serviceWallet.address}`);
-      } catch (error) {
-        console.error('❌ Failed to initialize service wallet:', error);
-      }
-    } else {
-      console.warn('⚠️ No valid service wallet private key found in configuration');
-      console.warn(`   Checked keys: blockchain.serviceWalletPrivateKey, blockchain.privateKey`);
-      console.warn(`   Config type: ${typeof this.config}, has get(): ${typeof this.config?.get === 'function'}`);
-    }
-  }
-
-  private initializeContracts(): void {
-    // EmailWalletRegistration ABI - MATCHES DEPLOYED CONTRACT
-    const registrationABI = [
-      "function isRegistered(address wallet) view returns (bool)",
-      "function getCreditBalance(address wallet) view returns (uint256)", 
-      "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
-      "function depositCredits(address wallet) payable",
-      "function deductCredits(address wallet, uint256 amount) returns (bool)",
-      "function getRegistration(address wallet) view returns (bytes32 registrationId, string primaryEmail, address parentCorporateWallet, bool autoProcessCC, uint256 registeredAt, bool isActive, uint256 creditBalance)",
-      "function owner() view returns (address)"
+    // UNIFIED CONTRACT ABI - All functions in one contract
+    private readonly UNIFIED_ABI = [
+        // OWNER MANAGEMENT
+        "function owner() view returns (address)",
+        "function transferOwnership(address newOwner)",
+        
+        // USER REGISTRATION & MANAGEMENT
+        "function registerUser(address userWallet, string email) payable returns (bytes32 userId)",
+        "function isRegistered(address userWallet) view returns (bool)",
+        "function getRegistration(address userWallet) view returns (bytes32 userId, string email, uint256 registeredAt, bool isActive, uint256 creditBalance)",
+        "function getCreditBalance(address userWallet) view returns (uint256)",
+        
+        // CREDIT MANAGEMENT
+        "function depositCredits(address userWallet) payable",
+        "function deductCredits(address userWallet, uint256 amount) returns (bool)",
+        
+        // EMAIL DATA WALLET CREATION
+        "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
+        "function createWalletWithAuthorization(address userWallet, string email, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
+        
+        // WALLET QUERIES
+        "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
+        "function getAllUserWallets(address user) view returns (bytes32[] memory)",
+        "function getActiveWalletCount(address user) view returns (uint256)",
+        
+        // ENHANCED FEATURES
+        "function validateDataIntegrity(bytes32 walletId) view returns (bool)",
+        "function getWalletProvenance(bytes32 walletId) view returns (string memory)",
+        "function setWalletStatus(bytes32 walletId, uint8 status)",
+        "function getWalletStatus(bytes32 walletId) view returns (uint8)",
+        
+        // EVENTS
+        "event UserRegistered(address indexed userWallet, bytes32 indexed userId, string email)",
+        "event EmailDataWalletCreated(bytes32 indexed walletId, address indexed owner, string subject, string sender)",
+        "event CreditsDeposited(address indexed userWallet, uint256 amount)",
+        "event CreditsDeducted(address indexed userWallet, uint256 amount)"
     ];
 
-    // EmailDataWallet ABI (Enhanced Contract)
-    const emailDataWalletABI = [
-      "function getAllUserWallets(address user) view returns (bytes32[] memory)",
-      "function getActiveWalletCount(address user) view returns (uint256)",
-      "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
-      "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)"
-    ];
-
-    // Get contract addresses
-    const registrationAddress = this.getConfigValue('blockchain.contractRegistration') ||
-                               this.getConfigValue('blockchain.contracts.registration') ||
-                               '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F';
-
-    const emailDataWalletAddress = this.getConfigValue('blockchain.contractEmailDataWallet') ||
-                                  this.getConfigValue('blockchain.contracts.emailDataWallet') ||
-                                  '0x0eb8830FaC353A63E912861137b246CAC7FC5977';
-
-    // Initialize contracts
-    if (registrationAddress) {
-      this.contracts.registration = new ethers.Contract(
-        registrationAddress,
-        registrationABI,
-        this.serviceWallet || this.provider
-      );
-      console.log(`📄 Registration contract connected: ${registrationAddress}`);
-    } else {
-      console.warn('⚠️ No registration contract address found in configuration');
+    constructor(configService: ConfigService) {
+        this.config = configService;
+        this.initialize();
     }
 
-    if (emailDataWalletAddress) {
-      this.contracts.emailDataWallet = new ethers.Contract(
-        emailDataWalletAddress,
-        emailDataWalletABI,
-        this.serviceWallet || this.provider
-      );
-      console.log(`📧 Email Data Wallet contract connected: ${emailDataWalletAddress}`);
-    } else {
-      console.warn('⚠️ No email data wallet contract address found in configuration');
-    }
-  }
+    private async initialize(): Promise<void> {
+        try {
+            console.log('🔧 Initializing Unified Blockchain Service...');
+            
+            // Initialize provider and wallet
+            const rpcUrl = this.config.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
+            this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+            
+            const privateKey = this.config.get('blockchain.serviceWalletPrivateKey');
+            if (!privateKey) {
+                throw new Error('Service wallet private key not found in configuration');
+            }
+            this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
 
-  // Address validation utility
-  private validateAndFormatAddress(address: string): string {
-    try {
-      return ethers.utils.getAddress(address.toLowerCase());
-    } catch (error) {
-      throw new Error(`Invalid Ethereum address: ${address}`);
-    }
-  }
+            // Initialize unified contract
+            const contractAddress = this.config.get('blockchain.unifiedContract');
+            if (!contractAddress) {
+                throw new Error('Unified contract address not found in configuration');
+            }
 
-  // Gas pricing utility
-  private async getGasPricing(): Promise<{ maxFeePerGas: ethers.BigNumber; maxPriorityFeePerGas: ethers.BigNumber }> {
-    try {
-      const feeData = await this.provider.getFeeData();
-      
-      const minGasPrice = ethers.utils.parseUnits('30', 'gwei');
-      const minPriorityFee = ethers.utils.parseUnits('25', 'gwei');
-      
-      const maxFeePerGas = feeData.maxFeePerGas?.gt(minGasPrice) ? feeData.maxFeePerGas : minGasPrice;
-      const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas?.gt(minPriorityFee) ? feeData.maxPriorityFeePerGas : minPriorityFee;
-      
-      return { maxFeePerGas, maxPriorityFeePerGas };
-    } catch (error) {
-      console.warn('⚠️ Failed to get network gas pricing, using defaults');
-      return {
-        maxFeePerGas: ethers.utils.parseUnits('35', 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei')
-      };
-    }
-  }
+            this.unifiedContract = new ethers.Contract(
+                contractAddress,
+                this.UNIFIED_ABI,
+                this.serviceWallet
+            );
 
-  async isUserRegistered(userAddress: string): Promise<boolean> {
-    try {
-      if (!this.contracts.registration) {
-        console.warn('⚠️ Registration contract not available');
-        return false;
-      }
-      
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const result = await this.contracts.registration.isRegistered(validAddress);
-      console.log(`🔍 User ${validAddress} registration status: ${result}`);
-      return result;
-    } catch (error) {
-      console.error('❌ Error checking user registration:', error);
-      return false;
-    }
-  }
+            console.log('✅ Unified Blockchain Service initialized');
+            console.log(`   Service Wallet: ${this.serviceWallet.address}`);
+            console.log(`   Unified Contract: ${contractAddress}`);
+            
+            // Verify ownership
+            await this.verifyContractOwnership();
 
-  async getUserCredits(userAddress: string): Promise<number> {
-    try {
-      if (!this.contracts.registration) {
-        console.warn('⚠️ Registration contract not available');
-        return 0;
-      }
-      
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const credits = await this.contracts.registration.getCreditBalance(validAddress);
-      const creditCount = credits.toNumber();
-      console.log(`💰 User ${validAddress} has ${creditCount} credits`);
-      return creditCount;
-    } catch (error) {
-      console.error('❌ Error getting user credits:', error);
-      return 0;
-    }
-  }
-
-  async getUserRegistration(userAddress: string): Promise<any> {
-    try {
-      if (!this.contracts.registration) {
-        console.warn('⚠️ Registration contract not available');
-        return null;
-      }
-      
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const registration = await this.contracts.registration.getRegistration(validAddress);
-      
-      return {
-        registrationId: registration.registrationId,
-        primaryEmail: registration.primaryEmail,
-        parentCorporateWallet: registration.parentCorporateWallet,
-        autoProcessCC: registration.autoProcessCC,
-        registeredAt: registration.registeredAt.toNumber(),
-        isActive: registration.isActive,
-        creditBalance: registration.creditBalance.toNumber()
-      };
-    } catch (error) {
-      console.error('❌ Error getting user registration:', error);
-      return null;
-    }
-  }
-
-  async getUserEmailWallets(userAddress: string): Promise<string[]> {
-    try {
-      if (!this.contracts.emailDataWallet) {
-        console.warn('⚠️ Email Data Wallet contract not available');
-        return [];
-      }
-      
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const wallets = await this.contracts.emailDataWallet.getAllUserWallets(validAddress);
-      console.log(`📧 User ${validAddress} has ${wallets.length} email wallets`);
-      return wallets;
-    } catch (error) {
-      console.error('❌ Error getting user email wallets:', error);
-      return [];
-    }
-  }
-
-  async getActiveWalletCount(userAddress: string): Promise<number> {
-    try {
-      if (!this.contracts.emailDataWallet) {
-        console.warn('⚠️ Email Data Wallet contract not available');
-        return 0;
-      }
-      
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const count = await this.contracts.emailDataWallet.getActiveWalletCount(validAddress);
-      const activeCount = count.toNumber();
-      console.log(`📊 User ${validAddress} has ${activeCount} active wallets`);
-      return activeCount;
-    } catch (error) {
-      console.error('❌ Error getting active wallet count:', error);
-      return 0;
-    }
-  }
-
-  async depositCredits(userAddress: string, amount: string): Promise<boolean> {
-    try {
-      if (!this.serviceWallet || !this.contracts.registration) {
-        console.error('❌ Service wallet or registration contract not available');
-        return false;
-      }
-
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      const gasPricing = await this.getGasPricing();
-      
-      const tx = await this.contracts.registration.depositCredits(
-        validAddress,
-        { 
-          value: ethers.utils.parseEther(amount),
-          maxFeePerGas: gasPricing.maxFeePerGas,
-          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+        } catch (error: any) {
+            console.error('❌ Blockchain service initialization failed:', error.message);
+            throw error;
         }
-      );
-      
-      await tx.wait();
-      console.log(`💰 Deposited credits for ${validAddress}. TX: ${tx.hash}`);
-      return true;
-    } catch (error) {
-      console.error('❌ Error depositing credits:', error);
-      return false;
     }
-  }
 
-  async testBlockchainWrite(): Promise<boolean> {
-    try {
-      if (!this.serviceWallet) {
-        console.error('❌ No service wallet available for blockchain write test');
-        return false;
-      }
-
-      console.log('🧪 Testing blockchain write capability...');
-      console.log(`🔑 Service wallet: ${this.serviceWallet.address}`);
-      
-      const balance = await this.serviceWallet.getBalance();
-      console.log(`💰 Service wallet balance: ${ethers.utils.formatEther(balance)} POL`);
-      
-      if (balance.lt(ethers.utils.parseEther('0.01'))) {
-        console.error('❌ Insufficient balance for write test');
-        return false;
-      }
-
-      console.log('📡 Attempting simple transaction...');
-      const gasPricing = await this.getGasPricing();
-      
-      const tx = await this.serviceWallet.sendTransaction({
-        to: this.serviceWallet.address,
-        value: ethers.utils.parseEther('0.001'),
-        gasLimit: 21000,
-        maxFeePerGas: gasPricing.maxFeePerGas,
-        maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
-      });
-      
-      console.log(`📋 Transaction submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Blockchain write test failed:', error);
-      return false;
-    }
-  }
-
-  async registerEmailWallet(userAddress: string, primaryEmail: string): Promise<boolean> {
-    try {
-      if (!this.serviceWallet || !this.contracts.registration) {
-        console.error('❌ Service wallet or registration contract not available');
-        return false;
-      }
-
-      const validAddress = this.validateAndFormatAddress(userAddress);
-      console.log(`📝 Attempting registration for ${validAddress} with email: ${primaryEmail}`);
-
-      const isAlreadyRegistered = await this.contracts.registration.isRegistered(validAddress);
-      if (isAlreadyRegistered) {
-        console.log(`⚠️ User ${validAddress} is already registered`);
-        return false;
-      }
-
-      const gasPricing = await this.getGasPricing();
-
-      const tx = await this.contracts.registration.registerEmailWallet(
-        primaryEmail,
-        [],
-        ethers.constants.AddressZero,
-        [],
-        [],
-        false,
-        { 
-          value: ethers.utils.parseEther("0.001"),
-          gasLimit: 500000,
-          maxFeePerGas: gasPricing.maxFeePerGas,
-          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+    /**
+     * Verify that the service wallet owns the contract
+     */
+    private async verifyContractOwnership(): Promise<void> {
+        try {
+            const contractOwner = await this.unifiedContract.owner();
+            const isOwner = contractOwner.toLowerCase() === this.serviceWallet.address.toLowerCase();
+            
+            console.log(`   Contract Owner: ${contractOwner}`);
+            console.log(`   Is Service Owner: ${isOwner}`);
+            
+            if (!isOwner) {
+                console.warn('⚠️  WARNING: Service wallet is not the contract owner');
+            }
+        } catch (error: any) {
+            console.warn(`⚠️  Could not verify contract ownership: ${error.message}`);
         }
-      );
-      
-      console.log(`📋 Registration transaction submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      console.log(`✅ Registration confirmed in block ${receipt.blockNumber}`);
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Registration failed:', error);
-      return false;
     }
-  }
 
-  /**
-   * Create an email data wallet on the blockchain
-   */
-  async createEmailWallet(
-    ownerAddress: string,
-    subject: string,
-    sender: string,
-    contentHash: string,
-    ipfsHash: string
-  ): Promise<string | null> {
-    try {
-      if (!this.serviceWallet || !this.contracts.emailDataWallet) {
-        console.error('❌ Service wallet or email data wallet contract not available');
-        return null;
-      }
+    /**
+     * REGISTER USER - Simplified unified approach
+     */
+    async registerUser(userAddress: string, email: string, signature: string, message: string): Promise<any> {
+        console.log(`📝 [UNIFIED] Registering user ${userAddress} with email: ${email}`);
+        
+        try {
+            // Validate address
+            const validAddress = ethers.utils.getAddress(userAddress);
+            
+            // Extract email from message for verification
+            const extractedEmail = this.extractEmailFromMessage(message);
+            if (extractedEmail !== email) {
+                throw new Error('Email mismatch between request and signed message');
+            }
+            
+            // Check if already registered
+            const isRegistered = await this.unifiedContract.isRegistered(validAddress);
+            if (isRegistered) {
+                throw new Error('User already registered');
+            }
 
-      const validAddress = this.validateAndFormatAddress(ownerAddress);
-      console.log(`📧 Creating email wallet for ${validAddress}: "${subject}" from ${sender}`);
+            // Register user with initial credit deposit
+            const creditDeposit = ethers.utils.parseEther('0.006'); // 60 credits worth
+            
+            const tx = await this.unifiedContract.registerUser(
+                validAddress,
+                email,
+                {
+                    value: creditDeposit,
+                    gasLimit: 300000,
+                    gasPrice: await this.getOptimalGasPrice()
+                }
+            );
 
-      const gasPricing = await this.getGasPricing();
-      const contentHashBytes = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(contentHash));
+            console.log(`📋 Registration transaction submitted: ${tx.hash}`);
+            const receipt = await tx.wait(2);
+            
+            if (receipt.status === 1) {
+                console.log(`✅ User registered successfully in block ${receipt.blockNumber}`);
+                
+                // Extract user ID from events
+                const userRegisteredEvent = receipt.events?.find(
+                    event => event.event === 'UserRegistered'
+                );
+                const userId = userRegisteredEvent?.args?.userId;
 
-      const tx = await this.contracts.emailDataWallet.createEmailDataWallet(
-        validAddress,
-        subject,
-        sender,
-        contentHashBytes,
-        ipfsHash,
-        {
-          gasLimit: 300000,
-          maxFeePerGas: gasPricing.maxFeePerGas,
-          maxPriorityFeePerGas: gasPricing.maxPriorityFeePerGas
+                return {
+                    success: true,
+                    transactionHash: tx.hash,
+                    blockNumber: receipt.blockNumber,
+                    userId: userId,
+                    userAddress: validAddress,
+                    email: email
+                };
+            } else {
+                throw new Error('Registration transaction failed');
+            }
+
+        } catch (error: any) {
+            console.error(`❌ User registration failed: ${error.message}`);
+            throw error;
         }
-      );
-
-      console.log(`📋 Email wallet creation transaction submitted: ${tx.hash}`);
-      const receipt = await tx.wait();
-      console.log(`✅ Email wallet created in block ${receipt.blockNumber}`);
-
-      // Extract wallet ID from transaction logs
-      const walletId = this.extractWalletIdFromReceipt(receipt);
-      if (walletId) {
-        console.log(`📧 Email wallet created with ID: ${walletId}`);
-      }
-
-      return walletId;
-    } catch (error) {
-      console.error('❌ Email wallet creation failed:', error);
-      return null;
     }
-  }
 
-  /**
-   * Extract wallet ID from transaction receipt
-   */
-  private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
-    try {
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === this.contracts.emailDataWallet.address.toLowerCase()) {
-          // The wallet ID should be in the first topic (after event signature)
-          if (log.topics.length >= 2) {
-            return log.topics[1];
-          }
+    /**
+     * CREATE EMAIL WALLET - Unified authorization approach
+     */
+    async createEmailWallet(
+        userAddress: string,
+        email: string, 
+        subject: string,
+        sender: string,
+        contentHash: string,
+        ipfsHash: string
+    ): Promise<any> {
+        console.log(`📧 [UNIFIED] Creating email wallet for user: ${userAddress}`);
+        
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            
+            // Verify user is registered
+            const isRegistered = await this.unifiedContract.isRegistered(validAddress);
+            if (!isRegistered) {
+                throw new Error('User not registered');
+            }
+
+            // Check credit balance
+            const credits = await this.unifiedContract.getCreditBalance(validAddress);
+            const requiredCredits = 4; // Email wallet cost
+            
+            if (credits.lt(requiredCredits)) {
+                throw new Error(`Insufficient credits: ${credits.toString()} (need ${requiredCredits})`);
+            }
+
+            // Create email wallet with authorization (service owner can do this)
+            const tx = await this.unifiedContract.createWalletWithAuthorization(
+                validAddress,
+                email,
+                subject,
+                sender,
+                contentHash,
+                ipfsHash,
+                {
+                    gasLimit: 500000,
+                    gasPrice: await this.getOptimalGasPrice()
+                }
+            );
+
+            console.log(`📋 Email wallet creation transaction: ${tx.hash}`);
+            const receipt = await tx.wait(2);
+
+            if (receipt.status === 1) {
+                console.log(`✅ Email wallet created in block ${receipt.blockNumber}`);
+                
+                // Extract wallet ID from events
+                const walletCreatedEvent = receipt.events?.find(
+                    event => event.event === 'EmailDataWalletCreated'
+                );
+                const walletId = walletCreatedEvent?.args?.walletId;
+
+                return {
+                    success: true,
+                    transactionHash: tx.hash,
+                    blockNumber: receipt.blockNumber,
+                    walletId: walletId,
+                    userAddress: validAddress,
+                    subject: subject,
+                    sender: sender,
+                    ipfsHash: ipfsHash
+                };
+            } else {
+                throw new Error('Email wallet creation failed');
+            }
+
+        } catch (error: any) {
+            console.error(`❌ Email wallet creation failed: ${error.message}`);
+            throw error;
         }
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to extract wallet ID from receipt:', error);
-      return null;
     }
-  }
 
-  /**
-   * Get email wallet details
-   */
-  async getEmailWallet(walletId: string): Promise<any> {
-    try {
-      if (!this.contracts.emailDataWallet) {
-        console.warn('⚠️ Email Data Wallet contract not available');
-        return null;
-      }
-
-      const wallet = await this.contracts.emailDataWallet.getEmailDataWallet(walletId);
-      
-      return {
-        walletId,
-        owner: wallet.owner,
-        subject: wallet.subject,
-        sender: wallet.sender,
-        timestamp: wallet.timestamp.toNumber(),
-        isActive: wallet.isActive,
-        contentHash: wallet.contentHash,
-        ipfsHash: wallet.ipfsHash
-      };
-    } catch (error) {
-      console.error('❌ Error getting email wallet:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Health check for blockchain service
-   */
-  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
-    try {
-      const blockNumber = await this.provider.getBlockNumber();
-      let serviceWalletBalance = 'N/A';
-      let walletHealthy = false;
-
-      if (this.serviceWallet) {
-        const balance = await this.serviceWallet.getBalance();
-        serviceWalletBalance = ethers.utils.formatEther(balance) + ' POL';
-        walletHealthy = balance.gt(ethers.utils.parseEther('0.01'));
-      }
-
-      return {
-        healthy: walletHealthy,
-        details: {
-          serviceWallet: this.serviceWallet?.address || 'Not configured',
-          balance: serviceWalletBalance,
-          blockNumber,
-          registrationContract: this.contracts.registration?.address || 'Not configured',
-          emailDataWalletContract: this.contracts.emailDataWallet?.address || 'Not configured',
-          networkConnected: true,
-          configType: typeof this.config,
-          hasGetMethod: typeof this.config?.get === 'function'
+    /**
+     * USER QUERIES - Simplified unified contract calls
+     */
+    async isUserRegistered(userAddress: string): Promise<boolean> {
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            return await this.unifiedContract.isRegistered(validAddress);
+        } catch (error: any) {
+            console.error(`Error checking registration for ${userAddress}: ${error.message}`);
+            return false;
         }
-      };
-
-    } catch (error: any) {
-      return {
-        healthy: false,
-        details: { 
-          error: error?.message || 'Unknown error',
-          configType: typeof this.config,
-          hasGetMethod: typeof this.config?.get === 'function'
-        }
-      };
     }
-  }
+
+    async getUserCredits(userAddress: string): Promise<number> {
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            const credits = await this.unifiedContract.getCreditBalance(validAddress);
+            return credits.toNumber();
+        } catch (error: any) {
+            console.error(`Error getting credits for ${userAddress}: ${error.message}`);
+            return 0;
+        }
+    }
+
+    async getUserRegistration(userAddress: string): Promise<any> {
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            const registration = await this.unifiedContract.getRegistration(validAddress);
+            
+            return {
+                userId: registration.userId,
+                email: registration.email,
+                registeredAt: new Date(registration.registeredAt.toNumber() * 1000),
+                isActive: registration.isActive,
+                creditBalance: registration.creditBalance.toNumber()
+            };
+        } catch (error: any) {
+            console.error(`Error getting registration for ${userAddress}: ${error.message}`);
+            return null;
+        }
+    }
+
+    async getAllUserWallets(userAddress: string): Promise<string[]> {
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            return await this.unifiedContract.getAllUserWallets(validAddress);
+        } catch (error: any) {
+            console.error(`Error getting wallets for ${userAddress}: ${error.message}`);
+            return [];
+        }
+    }
+
+    async getEmailWallet(walletId: string): Promise<any> {
+        try {
+            const wallet = await this.unifiedContract.getEmailDataWallet(walletId);
+            
+            return {
+                owner: wallet.owner,
+                subject: wallet.subject,
+                sender: wallet.sender,
+                timestamp: new Date(wallet.timestamp.toNumber() * 1000),
+                isActive: wallet.isActive,
+                contentHash: wallet.contentHash,
+                ipfsHash: wallet.ipfsHash
+            };
+        } catch (error: any) {
+            console.error(`Error getting wallet ${walletId}: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * DEPOSIT CREDITS - For existing users
+     */
+    async depositCredits(userAddress: string, amount: string): Promise<any> {
+        try {
+            const validAddress = ethers.utils.getAddress(userAddress);
+            const depositAmount = ethers.utils.parseEther(amount);
+            
+            const tx = await this.unifiedContract.depositCredits(
+                validAddress,
+                {
+                    value: depositAmount,
+                    gasLimit: 200000,
+                    gasPrice: await this.getOptimalGasPrice()
+                }
+            );
+
+            console.log(`💰 Credit deposit transaction: ${tx.hash}`);
+            const receipt = await tx.wait(2);
+
+            if (receipt.status === 1) {
+                return {
+                    success: true,
+                    transactionHash: tx.hash,
+                    blockNumber: receipt.blockNumber,
+                    userAddress: validAddress,
+                    amount: amount
+                };
+            } else {
+                throw new Error('Credit deposit failed');
+            }
+
+        } catch (error: any) {
+            console.error(`❌ Credit deposit failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Extract email from signed message
+     */
+    private extractEmailFromMessage(message: string): string {
+        const emailMatch = message.match(/Email:\s*([^\n\r]+)/);
+        if (!emailMatch) {
+            throw new Error('No email found in signed message');
+        }
+        return emailMatch[1].trim();
+    }
+
+    /**
+     * Get optimal gas price for current network conditions
+     */
+    private async getOptimalGasPrice(): Promise<ethers.BigNumber> {
+        try {
+            const gasPrice = await this.provider.getGasPrice();
+            // Add 20% buffer for network congestion
+            return gasPrice.mul(120).div(100);
+        } catch (error) {
+            console.warn('Using fallback gas price');
+            return ethers.utils.parseUnits('100', 'gwei');
+        }
+    }
+
+    /**
+     * Get service wallet balance
+     */
+    async getServiceWalletBalance(): Promise<string> {
+        try {
+            const balance = await this.serviceWallet.getBalance();
+            return ethers.utils.formatEther(balance);
+        } catch (error: any) {
+            console.error(`Error getting service balance: ${error.message}`);
+            return '0.0';
+        }
+    }
+
+    /**
+     * Health check - verify all systems operational
+     */
+    async healthCheck(): Promise<any> {
+        try {
+            const balance = await this.getServiceWalletBalance();
+            const owner = await this.unifiedContract.owner();
+            const isOwner = owner.toLowerCase() === this.serviceWallet.address.toLowerCase();
+
+            return {
+                status: 'healthy',
+                serviceWallet: this.serviceWallet.address,
+                balance: `${balance} POL`,
+                contractAddress: this.unifiedContract.address,
+                contractOwner: owner,
+                isContractOwner: isOwner,
+                network: 'Polygon Amoy (80002)'
+            };
+        } catch (error: any) {
+            return {
+                status: 'unhealthy',
+                error: error.message
+            };
+        }
+    }
 }
+
+/**
+ * EXPORT FOR USE IN APPLICATION
+ */
+export { BlockchainService };
