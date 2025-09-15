@@ -73,9 +73,14 @@ export class EmailWalletController extends Controller {
         return;
       }
 
-      // Register user with default email
-      const defaultEmail = `${validAddress.toLowerCase()}@temp.rootz.global`;
-      const success = await this.blockchainService.registerEmailWallet(validAddress, defaultEmail);
+      // Parse email from the signed message for security
+      const emailMatch = message.match(/Email:\s*([^\n\r]+)/);
+      const userEmail = emailMatch ? emailMatch[1].trim() : `${validAddress.toLowerCase()}@temp.rootz.global`;
+      
+      console.log(`📝 [REGISTER] Extracted email from signed message: ${userEmail}`);
+
+      // Register user with the verified email from signed message
+      const success = await this.blockchainService.registerEmailWallet(validAddress, userEmail);
       
       if (!success) {
         this.sendError(res, 'Registration failed', 500);
@@ -90,7 +95,7 @@ export class EmailWalletController extends Controller {
       this.sendResponse(res, {
         success: true,
         userAddress: validAddress,
-        email: defaultEmail,
+        email: userEmail,
         initialCredits: 60,
         message: 'User registered successfully'
       });
