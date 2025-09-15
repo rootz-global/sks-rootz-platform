@@ -385,19 +385,19 @@ export class DatabaseService {
   private mapRowToAuthorizationRequest(row: any): AuthorizationRequest {
     try {
       // Safely parse JSONB fields with fallbacks
-      let attachmentHashes = [];
+      let attachmentHashes: string[] = [];
       if (row.attachment_hashes) {
         try {
           attachmentHashes = typeof row.attachment_hashes === 'string' 
             ? JSON.parse(row.attachment_hashes) 
             : row.attachment_hashes;
-        } catch (e) {
-          console.warn(`[DB] Invalid attachment_hashes JSON for request ${row.request_id}:`, e.message);
+        } catch (e: any) {
+          console.warn(`[DB] Invalid attachment_hashes JSON for request ${row.request_id}:`, e?.message || 'Unknown error');
           attachmentHashes = []; // Fallback to empty array
         }
       }
 
-      let emailData = null;
+      let emailData: any = null;
       if (row.email_data) {
         try {
           emailData = typeof row.email_data === 'string' 
@@ -421,8 +421,8 @@ export class DatabaseService {
               }
             });
           }
-        } catch (e) {
-          console.warn(`[DB] Invalid email_data JSON for request ${row.request_id}:`, e.message);
+        } catch (e: any) {
+          console.warn(`[DB] Invalid email_data JSON for request ${row.request_id}:`, e?.message || 'Unknown error');
           // Create minimal email data from available fields
           emailData = {
             from: row.email_sender || 'unknown@sender.com',
@@ -453,9 +453,9 @@ export class DatabaseService {
         ipfsHash: row.ipfs_hash,
         emailData: emailData
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[DB] Error mapping authorization request ${row.request_id}:`, error);
-      throw new Error(`Failed to map authorization request: ${error.message}`);
+      throw new Error(`Failed to map authorization request: ${error?.message || 'Unknown error'}`);
     }
   }
 }
