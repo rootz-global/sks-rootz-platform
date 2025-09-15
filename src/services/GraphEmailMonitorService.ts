@@ -2,6 +2,7 @@ import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 import { Config } from '../config/Config';
 import { BlockchainService } from './BlockchainService';
+import { ConfigService } from './ConfigService';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -32,6 +33,7 @@ interface ProcessedEmail {
 export class GraphEmailMonitorService {
   private graphClient: Client | null = null;
   private config: any;
+  private configService: ConfigService;
   private blockchainService: BlockchainService | null = null;
   private isRunning: boolean = false;
   private monitoringInterval: NodeJS.Timer | null = null;
@@ -39,11 +41,12 @@ export class GraphEmailMonitorService {
 
   constructor(domain: string = 'localhost') {
     this.config = this.loadEpisteryConfig(domain);
+    this.configService = new ConfigService(domain);
     this.lastProcessedTime = new Date(Date.now() - 60000); // Start 1 minute ago
     
     try {
       this.initializeGraphClient();
-      this.blockchainService = new BlockchainService(this.config);
+      this.blockchainService = new BlockchainService(this.configService);
     } catch (error) {
       console.warn('⚠️ Failed to initialize Graph client or blockchain service:', error);
     }
