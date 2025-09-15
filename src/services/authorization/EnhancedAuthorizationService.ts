@@ -254,8 +254,9 @@ export class EnhancedAuthorizationService {
       }
       
       // Verify signature (user proving consent)
-      const messageHash = ethers.utils.keccak256(ethers.utils.solidityPack(['bytes32'], [requestId]));
-      const expectedAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(messageHash), signature);
+      // Use standard Ethereum message signing format to match frontend
+      const message = `Authorize Email Wallet Creation: ${requestId}`;
+      const expectedAddress = ethers.utils.verifyMessage(message, signature);
       
       if (expectedAddress.toLowerCase() !== userAddress.toLowerCase()) {
         throw new Error('Invalid signature - signature does not match user address');
