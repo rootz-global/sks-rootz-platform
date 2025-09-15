@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import EmailProcessingController from '../controllers/EmailProcessingController';
 import { Config } from '../core/configuration';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
 
-export function createEmailProcessingRoutes(config: Config): Router {
+export function createEmailProcessingRoutes(config: Config, sharedAuthService?: EnhancedAuthorizationService): Router {
   const router = Router();
-  const controller = new EmailProcessingController(config);
+  const controller = new EmailProcessingController(config, sharedAuthService);
   
   /**
    * Process email and create authorization request

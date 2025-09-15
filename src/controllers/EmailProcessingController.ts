@@ -14,9 +14,10 @@ export class EmailProcessingController {
   private ipfsService: LocalIPFSService;
   private emailParser: EmailParser;
 
-  constructor(config: Config) {
+  constructor(config: Config, sharedAuthService?: EnhancedAuthorizationService) {
     this.config = config;
-    this.authService = new EnhancedAuthorizationService(config);
+    // Use shared service if provided, otherwise create new instance
+    this.authService = sharedAuthService || new EnhancedAuthorizationService(config);
     this.ipfsService = new LocalIPFSService(config);
     this.emailParser = new EmailParser();
     

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Config } from '../core/configuration';
 import IntegratedEmailMonitoringService from '../services/IntegratedEmailMonitoringService';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
 
 /**
  * Email Monitoring Controller - Unified Service
@@ -10,9 +11,9 @@ export class EmailMonitoringController {
   private config: Config;
   private emailMonitoringService: IntegratedEmailMonitoringService;
 
-  constructor(config: Config) {
+  constructor(config: Config, sharedAuthService?: EnhancedAuthorizationService) {
     this.config = config;
-    this.emailMonitoringService = new IntegratedEmailMonitoringService(config);
+    this.emailMonitoringService = new IntegratedEmailMonitoringService(config, sharedAuthService);
     console.log('🔧 Email Monitoring Controller initialized');
   }
 

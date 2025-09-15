@@ -1,5 +1,6 @@
 import { Config } from '../core/configuration';
 import EmailProcessingController from '../controllers/EmailProcessingController';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
 
 /**
  * Integrated Email Monitoring Service
@@ -13,9 +14,9 @@ export class IntegratedEmailMonitoringService {
   private lastProcessedTime: Date = new Date();
   private graphClient: any = null;
 
-  constructor(config: Config) {
+  constructor(config: Config, sharedAuthService?: EnhancedAuthorizationService) {
     this.config = config;
-    this.emailController = new EmailProcessingController(config);
+    this.emailController = new EmailProcessingController(config, sharedAuthService);
     
     this.initializeGraphClient();
     console.log('🔧 Integrated Email Monitoring Service initialized');

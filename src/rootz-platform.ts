@@ -11,6 +11,7 @@ import authorizationRoutes from './routes/authorizationRoutes';
 import EmailMonitoringController from './controllers/EmailMonitoringController';
 import { DataWalletMintingService } from './services/DataWalletMintingService';
 import { BlockchainEventMonitor } from './services/BlockchainEventMonitor';
+import { EnhancedAuthorizationService } from './services/authorization/EnhancedAuthorizationService';
 
 // CORS middleware function
 function enableCORS(req: Request, res: Response, next: NextFunction): void {
@@ -32,6 +33,7 @@ export class RootzPlatform {
   private config: Config;
   private isInitialized = false;
   private mintingService?: DataWalletMintingService;
+  private sharedAuthService?: EnhancedAuthorizationService; // SHARED INSTANCE
 
   private constructor() {
     this.config = new Config();
@@ -66,12 +68,25 @@ export class RootzPlatform {
       console.error('⚠️  Platform will continue without automatic minting');
     }
     
+    // Initialize shared Enhanced Authorization Service
+    try {
+      console.log('🔐 Initializing shared Enhanced Authorization Service...');
+      this.sharedAuthService = new EnhancedAuthorizationService(this.config);
+      console.log('✅ Shared Enhanced Authorization Service initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize Enhanced Authorization Service:', error);
+    }
+    
     this.isInitialized = true;
     console.log('✅ Platform initialization complete');
   }
 
   public getConfig(): Config {
     return this.config;
+  }
+
+  public getSharedAuthService(): EnhancedAuthorizationService | undefined {
+    return this.sharedAuthService;
   }
 
   public getMintingService(): DataWalletMintingService | undefined {
@@ -168,7 +183,7 @@ export class RootzPlatform {
 
     // EMAIL MONITORING ROUTES (INTEGRATED) - Replaces old email monitoring
     console.log('📧 Initializing Integrated Email Monitoring routes...');
-    const emailMonitoringController = new EmailMonitoringController(this.config);
+    const emailMonitoringController = new EmailMonitoringController(this.config, this.sharedAuthService);
     router.post('/email-monitoring/start', emailMonitoringController.startMonitoring.bind(emailMonitoringController));
     router.post('/email-monitoring/stop', emailMonitoringController.stopMonitoring.bind(emailMonitoringController));
     router.get('/email-monitoring/status', emailMonitoringController.getStatus.bind(emailMonitoringController));
@@ -180,7 +195,7 @@ export class RootzPlatform {
     // EMAIL PROCESSING ROUTES (NEW) - Complete Email-to-Blockchain System
     console.log('🔧 Initializing Email Processing routes...');
     try {
-      const emailProcessingRoutes = createEmailProcessingRoutes(this.config);
+      const emailProcessingRoutes = createEmailProcessingRoutes(this.config, this.sharedAuthService);
       router.use('/email-processing', emailProcessingRoutes);
       console.log('✅ Email Processing routes initialized');
       console.log('   Available at: /.rootz/email-processing/*');
