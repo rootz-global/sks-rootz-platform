@@ -298,7 +298,7 @@ export class EnhancedAuthorizationService {
       return {
         success: true,
         requestId,
-        emailWalletId: walletId,
+        emailWalletId: walletId || undefined,
         authorizationTx: createTx.hash
       };
       
@@ -415,6 +415,98 @@ export class EnhancedAuthorizationService {
     } catch (error) {
       console.error('Failed to extract wallet ID from receipt:', error);
       return null;
+    }
+  }
+  
+  /**
+   * Check if authorization request is valid
+   */
+  async isRequestValid(requestId: string): Promise<boolean> {
+    try {
+      const request = this.authorizationRequests.get(requestId);
+      if (!request) return false;
+      
+      if (request.status !== 'pending') return false;
+      if (new Date() > request.expiresAt) return false;
+      
+      return true;
+    } catch (error) {
+      console.error('Error checking request validity:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Get user's authorization requests
+   */
+  async getUserRequests(userAddress: string): Promise<string[]> {
+    try {
+      const userRequests: string[] = [];
+      
+      for (const [requestId, request] of this.authorizationRequests.entries()) {
+        if (request.userAddress.toLowerCase() === userAddress.toLowerCase()) {
+          userRequests.push(requestId);
+        }
+      }
+      
+      return userRequests;
+    } catch (error) {
+      console.error('Error getting user requests:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Process authorized request (legacy compatibility)
+   */
+  async processAuthorizedRequest(
+    requestId: string,
+    emailData: ParsedEmailData,
+    ipfsHash: string
+  ): Promise<AuthorizationResult> {
+    try {
+      const request = this.authorizationRequests.get(requestId);
+      if (!request) {
+        throw new Error('Request not found');
+      }
+      
+      if (request.status !== 'authorized') {
+        throw new Error('Request not authorized');
+      }
+      
+      // Create EMAIL_DATA_WALLET directly
+      const contentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(emailData.emailHash));
+      
+      const createTx = await this.emailDataWalletContract.createEmailDataWallet(
+        request.userAddress,
+        emailData.subject,
+        emailData.from,
+        contentHash,
+        ipfsHash,
+        {
+          gasLimit: 300000,
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+        }
+      );
+      
+      const receipt = await createTx.wait();
+      const walletId = this.extractWalletIdFromReceipt(receipt);
+      
+      request.status = 'processed';
+      
+      return {
+        success: true,
+        requestId,
+        emailWalletId: walletId || undefined,
+        authorizationTx: createTx.hash
+      };
+      
+    } catch (error: any) {
+      console.error('Error processing authorized request:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to process request'
+      };
     }
   }
   

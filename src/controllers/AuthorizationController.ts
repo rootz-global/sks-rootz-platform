@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Controller } from './Controller';
-import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
+import { EnhancedAuthorizationService, AuthorizationRequest } from '../services/authorization/EnhancedAuthorizationService';
 import { Config } from '../core/configuration';
 
 export class AuthorizationController extends Controller {
@@ -169,7 +169,7 @@ export class AuthorizationController extends Controller {
       
       // Get full request details for each ID
       const requests = await Promise.all(
-        requestIds.map(async (id) => {
+        requestIds.map(async (id: string) => {
           try {
             return await this.authService.getAuthorizationRequest(id);
           } catch (error) {
@@ -180,7 +180,7 @@ export class AuthorizationController extends Controller {
       );
 
       // Filter out null results
-      const validRequests = requests.filter(req => req !== null);
+      const validRequests = requests.filter((req: AuthorizationRequest | null): req is AuthorizationRequest => req !== null);
 
       console.log(`✅ [AUTH] Found ${validRequests.length} requests for user`);
       
