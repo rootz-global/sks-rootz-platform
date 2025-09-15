@@ -99,15 +99,15 @@ export class EnhancedAuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // NEW EmailDataWalletOS_Secure ABI
+      // EmailDataWalletOS_Secure ABI (CORRECT - matches deployed contract)
       const emailDataWalletABI = [
-        "function createEmailDataWallet(address owner, string subject, string sender, bytes32 contentHash, string ipfsHash) returns (bytes32 walletId)",
-        "function getEmailDataWallet(bytes32 walletId) view returns (tuple(address owner, string subject, string sender, uint256 timestamp, bool isActive, bytes32 contentHash, string ipfsHash))",
-        "function getAllUserWallets(address user) view returns (bytes32[] memory)",
+        "function createEmailDataWallet(address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata) returns (uint256 walletId)",
+        "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
+        "function getAllUserWallets(address user) view returns (uint256[] memory)",
         "function getActiveWalletCount(address user) view returns (uint256)",
         "function getTotalWalletCount() view returns (uint256)",
-        "function walletExists(bytes32 walletId) view returns (bool)",
-        "function updateEmailDataWallet(bytes32 walletId, string newSubject, string newSender, bytes32 newContentHash, string newIpfsHash)",
+        "function walletExists(uint256 walletId) view returns (bool)",
+        "function updateEmailDataWallet(uint256 walletId, string newMetadata)",
         "function owner() view returns (address)"
       ];
       
@@ -284,18 +284,20 @@ export class EnhancedAuthorizationService {
       await deductTx.wait();
       console.log(`✅ Credits deducted: ${deductTx.hash}`);
       
-      // Create content hash
+      // Create EMAIL_DATA_WALLET on new enhanced contract
+      // Contract expects: (address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata)
       const contentHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash));
       
-      // Create EMAIL_DATA_WALLET on new enhanced contract
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
         userAddress,
+        request.emailData.emailHash,
         request.emailData.subject,
-        request.emailData.from,
         contentHash,
-        request.ipfsHash || '',
+        request.emailData.from,
+        request.attachmentHashes || [],
+        JSON.stringify({ ipfsHash: request.ipfsHash, requestId }),
         {
-          gasLimit: 300000,
+          gasLimit: 400000,
           gasPrice: ethers.utils.parseUnits('30', 'gwei')
         }
       );
@@ -522,10 +524,15 @@ export class EnhancedAuthorizationService {
    */
   private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
     try {
+      // For the EmailDataWalletOS_Secure contract, the wallet ID is returned as uint256
+      // Look for EmailDataWalletCreated event
       for (const log of receipt.logs) {
         if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {
+          // First topic is event signature, second topic is indexed walletId
           if (log.topics.length >= 2) {
-            return log.topics[1];
+            // Convert the hex topic to decimal wallet ID
+            const walletId = ethers.BigNumber.from(log.topics[1]).toString();
+            return walletId;
           }
         }
       }
