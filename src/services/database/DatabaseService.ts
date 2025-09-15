@@ -221,9 +221,9 @@ export class DatabaseService {
     try {
       const result = await client.query(`
         SELECT * FROM authorization_requests 
-        WHERE user_address = $1 
+        WHERE LOWER(user_address) = LOWER($1) 
         ORDER BY created_at DESC
-      `, [userAddress.toLowerCase()]);
+      `, [userAddress]);
       
       return result.rows.map(row => this.mapRowToAuthorizationRequest(row));
       
