@@ -54,7 +54,8 @@ export class EnhancedAuthorizationService {
   constructor(config: Config) {
     // Singleton pattern - return existing instance if available
     if (EnhancedAuthorizationService.instance) {
-      return EnhancedAuthorizationService.instance;
+      // For TypeScript: cast to this type since we're returning existing instance
+      return EnhancedAuthorizationService.instance as EnhancedAuthorizationService;
     }
     
     this.config = config;
