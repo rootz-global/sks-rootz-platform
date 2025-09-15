@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import { Controller } from './Controller';
-import { AuthorizationService } from '../services/authorization/AuthorizationService';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
 import { Config } from '../core/configuration';
 
 export class AuthorizationController extends Controller {
-  private authService: AuthorizationService;
+  private authService: EnhancedAuthorizationService;
 
   constructor(domain: string = 'localhost') {
     super();
@@ -12,7 +12,7 @@ export class AuthorizationController extends Controller {
     // Initialize authorization service with config
     const config = new Config();
     config.loadDomain(domain);
-    this.authService = new AuthorizationService(config);
+    this.authService = new EnhancedAuthorizationService(config);
   }
 
   /**
@@ -124,21 +124,25 @@ export class AuthorizationController extends Controller {
 
       console.log(`✅ [AUTH] Request validation passed`);
 
-      // Return instructions for user to call contract directly
-      // The user must call authorizeEmailWalletCreation() from their MetaMask
-      const contractAddress = this.authService['authContract'].address;
-      
-      this.sendResponse(res, {
-        success: true,
-        message: 'User must call contract function directly through MetaMask',
-        instructions: {
-          contractAddress: contractAddress,
-          functionName: 'authorizeEmailWalletCreation',
-          parameters: [requestId, signature],
-          network: 'Polygon Amoy (Chain ID: 80002)'
-        },
-        nextStep: 'Call the contract function from your connected wallet'
-      });
+      // Use ENHANCED authorization service - directly creates EMAIL_DATA_WALLET
+      const result = await this.authService.authorizeEmailWalletCreation(
+        requestId,
+        userAddress,
+        signature
+      );
+
+      if (result.success) {
+        console.log(`🎉 [AUTH] EMAIL_DATA_WALLET created successfully`);
+        this.sendResponse(res, {
+          success: true,
+          message: 'Email wallet created successfully!',
+          emailWalletId: result.emailWalletId,
+          transactionHash: result.authorizationTx,
+          requestId: result.requestId
+        });
+      } else {
+        throw new Error(result.error || 'Enhanced authorization failed');
+      }
       
     } catch (error) {
       console.error('❌ [AUTH] Authorization error:', error);
