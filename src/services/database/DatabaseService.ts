@@ -380,24 +380,83 @@ export class DatabaseService {
   
   /**
    * Map database row to AuthorizationRequest object
+   * Handles malformed JSON gracefully
    */
   private mapRowToAuthorizationRequest(row: any): AuthorizationRequest {
-    return {
-      requestId: row.request_id,
-      userAddress: row.user_address,
-      authToken: row.auth_token,
-      emailHash: row.email_hash,
-      attachmentHashes: JSON.parse(row.attachment_hashes || '[]'),
-      creditCost: row.credit_cost,
-      createdAt: row.created_at,
-      expiresAt: row.expires_at,
-      status: row.status,
-      emailSender: row.email_sender,
-      emailSubject: row.email_subject,
-      attachmentCount: row.attachment_count || 0,
-      ipfsHash: row.ipfs_hash,
-      emailData: row.email_data ? JSON.parse(row.email_data) : undefined
-    };
+    try {
+      // Safely parse JSONB fields with fallbacks
+      let attachmentHashes = [];
+      if (row.attachment_hashes) {
+        try {
+          attachmentHashes = typeof row.attachment_hashes === 'string' 
+            ? JSON.parse(row.attachment_hashes) 
+            : row.attachment_hashes;
+        } catch (e) {
+          console.warn(`[DB] Invalid attachment_hashes JSON for request ${row.request_id}:`, e.message);
+          attachmentHashes = []; // Fallback to empty array
+        }
+      }
+
+      let emailData = null;
+      if (row.email_data) {
+        try {
+          emailData = typeof row.email_data === 'string' 
+            ? JSON.parse(row.email_data) 
+            : row.email_data;
+            
+          // Fix malformed headers if they exist
+          if (emailData && emailData.headers) {
+            const headers = emailData.headers;
+            // Convert "[object Object]" strings back to reasonable values
+            Object.keys(headers).forEach(key => {
+              if (headers[key] === "[object Object]") {
+                // For email addresses, extract from original fields
+                if (key === 'from') {
+                  headers[key] = emailData.from || 'unknown@sender.com';
+                } else if (key === 'to') {
+                  headers[key] = emailData.to ? emailData.to[0] : 'unknown@recipient.com';
+                } else {
+                  headers[key] = 'unavailable';
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.warn(`[DB] Invalid email_data JSON for request ${row.request_id}:`, e.message);
+          // Create minimal email data from available fields
+          emailData = {
+            from: row.email_sender || 'unknown@sender.com',
+            subject: row.email_subject || 'No subject',
+            to: ['process@rivetz.com'],
+            headers: {
+              from: row.email_sender || 'unknown@sender.com',
+              subject: row.email_subject || 'No subject',
+              to: 'process@rivetz.com'
+            }
+          };
+        }
+      }
+
+      return {
+        requestId: row.request_id,
+        userAddress: row.user_address,
+        authToken: row.auth_token,
+        emailHash: row.email_hash,
+        attachmentHashes: attachmentHashes,
+        creditCost: row.credit_cost,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        status: row.status,
+        emailSender: row.email_sender,
+        emailSubject: row.email_subject,
+        attachmentCount: row.attachment_count || 0,
+        ipfsHash: row.ipfs_hash,
+        emailData: emailData
+      };
+    } catch (error) {
+      console.error(`[DB] Error mapping authorization request ${row.request_id}:`, error);
+      throw new Error(`Failed to map authorization request: ${error.message}`);
+    }
   }
 }
 
