@@ -103,15 +103,13 @@ export class EnhancedAuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // EmailDataWalletOS_Secure ABI - THE UNIFIED CONTRACT
+      // EmailDataWalletOS_Secure ABI - THE CORRECT DEPLOYED CONTRACT
       const emailDataWalletABI = [
-        "function createEmailDataWallet(address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata) returns (uint256 walletId)",
-        "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
-        "function getAllUserWallets(address user) view returns (uint256[] memory)",
-        "function getActiveWalletCount(address user) view returns (uint256)",
-        "function getTotalWalletCount() view returns (uint256)",
-        "function walletExists(uint256 walletId) view returns (bool)",
-        "function owner() view returns (address)"
+        "function createEmailDataWallet(string messageId, string subject, string fromAddress, string toAddress, bytes32 bodyHash, bytes32 emailHash, bytes32 headersHash, string ipfsHash, uint32 attachmentCount, bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) returns (bytes32 walletId)",
+        "function getEmailData(bytes32 walletId) view returns (tuple(string messageId, string subject, string fromAddress, string toAddress, uint256 timestamp, bytes32 bodyHash, bytes32 emailHash, bytes32 headersHash, string ipfsHash, uint32 attachmentCount, bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature))",
+        "function ownership(bytes32 walletId) view returns (tuple(address primaryOwner, address[] secondaryOwners, bool isActive))",
+        "function ownerDataWallets(address owner, uint256 index) view returns (bytes32)",
+        "function totalDataWallets() view returns (uint256)"
       ];
       
       // Registration contract ABI
@@ -285,15 +283,21 @@ export class EnhancedAuthorizationService {
       await deductTx.wait();
       console.log(`✅ Credits deducted: ${deductTx.hash}`);
       
-      // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters
+      // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters for deployed contract
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
-        userAddress,
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || '')).substring(2), // Hash the email content
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.subject || '')).substring(2), // Hash the subject
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyHash || '')).substring(2), // Use body hash as content hash
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.from || '')).substring(2), // Hash the sender
-        request.attachmentHashes.map(hash => hash.startsWith('0x') ? hash.substring(2) : hash), // Ensure no 0x prefix
-        JSON.stringify({ ipfsHash: request.ipfsHash, requestId, timestamp: new Date().toISOString() }),
+        request.emailData.messageId || `generated-${Date.now()}`,
+        request.emailData.subject || 'No Subject',
+        request.emailData.from || 'unknown@unknown.com',
+        'process@rivetz.com', // toAddress
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || '')), // bodyHash
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash || '')), // emailHash
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || {}))), // headersHash
+        request.ipfsHash || '',
+        request.attachmentCount || 0,
+        request.emailData.authentication?.spfPass || false,
+        request.emailData.authentication?.dkimValid || false,
+        request.emailData.authentication?.dmarcPass || false,
+        request.emailData.authentication?.dkimSignature || '',
         {
           gasLimit: 500000,
           gasPrice: ethers.utils.parseUnits('30', 'gwei')
@@ -526,15 +530,13 @@ export class EnhancedAuthorizationService {
    */
   private extractWalletIdFromReceipt(receipt: ethers.providers.TransactionReceipt): string | null {
     try {
-      // For the EmailDataWalletOS_Secure contract, the wallet ID is returned as uint256
-      // Look for EmailDataWalletCreated event
+      // The deployed contract returns bytes32 walletId directly
+      // Look for DataWalletCreated event or use the return value
       for (const log of receipt.logs) {
         if (log.address.toLowerCase() === this.emailDataWalletContract.address.toLowerCase()) {
-          // First topic is event signature, second topic is indexed walletId
+          // For the deployed contract, wallet ID is bytes32, so return it directly
           if (log.topics.length >= 2) {
-            // Convert the hex topic to decimal wallet ID
-            const walletId = ethers.BigNumber.from(log.topics[1]).toString();
-            return walletId;
+            return log.topics[1]; // bytes32 wallet ID
           }
         }
       }
