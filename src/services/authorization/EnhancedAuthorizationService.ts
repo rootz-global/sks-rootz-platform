@@ -283,25 +283,7 @@ export class EnhancedAuthorizationService {
       await deductTx.wait();
       console.log(`✅ Credits deducted: ${deductTx.hash}`);
       
-      console.log('🎯 DEBUGGING: Contract call parameters:');
-      console.log('  messageId:', request.emailData.messageId || `generated-${Date.now()}`);
-      console.log('  subject:', request.emailData.subject || 'No Subject');
-      console.log('  fromAddress:', request.emailData.from || 'unknown@unknown.com');
-      console.log('  toAddress:', 'process@rivetz.com');
-      console.log('  bodyHash:', ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || 'empty')));
-      console.log('  emailHash:', ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash || 'empty')));
-      console.log('  headersHash:', ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || {}))));
-      console.log('  ipfsHash:', request.ipfsHash || 'empty');
-      console.log('  attachmentCount:', request.attachmentCount || 0);
-      console.log('  authentication:', {
-        spfPass: true,
-        dkimValid: true, 
-        dmarcPass: true,
-        dkimSignature: 'valid-dkim-signature'
-      });
-      
       // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters for deployed contract
-      // IMPORTANT: Set proper email authentication to pass contract validation
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
         request.emailData.messageId || `generated-${Date.now()}`,
         request.emailData.subject || 'No Subject',
@@ -311,7 +293,7 @@ export class EnhancedAuthorizationService {
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash || '')), // emailHash
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || {}))), // headersHash
         request.ipfsHash || '',
-        request.attachmentCount || 0,
+        ethers.BigNumber.from(request.attachmentCount || 0), // uint256 not uint32
         true, // spfPass - SET TO TRUE to pass validation
         true, // dkimValid - SET TO TRUE to pass validation
         true, // dmarcPass - SET TO TRUE to pass validation
