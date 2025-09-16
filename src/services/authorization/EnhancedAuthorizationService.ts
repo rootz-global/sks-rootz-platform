@@ -317,11 +317,11 @@ export class EnhancedAuthorizationService {
       // PARAM 2: emailHash - MUST BE UNIQUE and under 500 chars
       const uniqueEmailHash = `email-${requestId.substring(2, 10)}-${Date.now()}`.substring(0, 60);
       
-      // Check if this emailHash already exists
-      const emailHashExists = await this.emailDataWalletContract.emailHashExists(uniqueEmailHash);
-      if (emailHashExists) {
-        throw new Error(`Email hash collision detected: ${uniqueEmailHash}`);
-      }
+      // TEMPORARILY DISABLED - Let contract handle emailHash collision
+      // const emailHashExists = await this.emailDataWalletContract.emailHashExists(uniqueEmailHash);
+      // if (emailHashExists) {
+      //   throw new Error(`Email hash collision detected: ${uniqueEmailHash}`);
+      // }
       
       // PARAM 3: subjectHash - Non-empty, under 500 chars
       const subjectHash = (request.emailData.subject || 'No-Subject-Provided').substring(0, 400);
