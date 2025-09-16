@@ -387,7 +387,7 @@ export class EnhancedAuthorizationService {
           validatedAttachmentHashes,   // string[] attachmentHashes (ALL NON-EMPTY, <500)
           metadata,                    // string metadata (NON-EMPTY, <500)
           {
-            gasLimit: Math.max(gasEstimate.mul(120).div(100), 500000), // 20% buffer or 500k minimum
+            gasLimit: gasEstimate.gt(500000) ? gasEstimate.mul(120).div(100) : ethers.BigNumber.from(500000),
             gasPrice: ethers.utils.parseUnits('30', 'gwei')
           }
         );
