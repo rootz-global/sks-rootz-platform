@@ -285,14 +285,14 @@ export class EnhancedAuthorizationService {
       await deductTx.wait();
       console.log(`✅ Credits deducted: ${deductTx.hash}`);
       
-      // Call EmailDataWalletOS_Secure.createEmailDataWallet with proper parameters
+      // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
         userAddress,
-        request.emailData.emailHash || '',
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || '')).substring(2), // Hash the email content
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.subject || '')).substring(2), // Hash the subject
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash)).substring(2), // Remove 0x prefix
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyHash || '')).substring(2), // Use body hash as content hash
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.from || '')).substring(2), // Hash the sender
-        request.attachmentHashes || [],
+        request.attachmentHashes.map(hash => hash.startsWith('0x') ? hash.substring(2) : hash), // Ensure no 0x prefix
         JSON.stringify({ ipfsHash: request.ipfsHash, requestId, timestamp: new Date().toISOString() }),
         {
           gasLimit: 500000,
