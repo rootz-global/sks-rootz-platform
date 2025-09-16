@@ -80,8 +80,8 @@ export class EnhancedAuthorizationService {
     try {
       const rpcUrl = this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
       const privateKey = this.config.get('blockchain.serviceWalletPrivateKey');
-      const authorizationContractAddress = ethers.utils.getAddress(
-        this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d43bA741069cC2CEEA219573')!.toLowerCase()
+      const emailDataWalletContractAddress = ethers.utils.getAddress(
+        this.config.get('blockchain.contractEmailDataWallet', '0x0eb8830FaC353A63E912861137b246CAC7FC5977')!.toLowerCase()
       );
       const registrationContractAddress = ethers.utils.getAddress(
         this.config.get('blockchain.contractRegistration')!.toLowerCase()
@@ -91,8 +91,8 @@ export class EnhancedAuthorizationService {
         throw new Error('blockchain.serviceWalletPrivateKey not configured');
       }
       
-      if (!authorizationContractAddress) {
-        throw new Error('blockchain.contractAuthorization not configured');
+      if (!emailDataWalletContractAddress) {
+        throw new Error('blockchain.contractEmailDataWallet not configured');
       }
       
       if (!registrationContractAddress) {
@@ -103,13 +103,14 @@ export class EnhancedAuthorizationService {
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
       this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
       
-      // AuthorizationManagerFixed ABI - THE ORCHESTRATOR FOR COMPLETE ORIGIN FLOW
-      const authorizationABI = [
-        "function createAuthorizationRequest(address userWallet, string authToken, string emailHash, bytes32[] attachmentHashes) returns (bytes32 requestId)",
-        "function authorizeEmailWalletCreation(bytes32 requestId, bytes signature)",
-        "function getRequest(bytes32 requestId) view returns (tuple(bytes32 requestId, address userWallet, string authToken, string emailHash, bytes32[] attachmentHashes, uint256 timestamp, uint256 expiresAt, uint8 status))",
-        "function isRequestValid(bytes32 requestId) view returns (bool)",
-        "function getRequestStatus(bytes32 requestId) view returns (uint8)",
+      // EmailDataWalletOS_Secure ABI - THE UNIFIED CONTRACT
+      const emailDataWalletABI = [
+        "function createEmailDataWallet(address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata) returns (uint256 walletId)",
+        "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
+        "function getAllUserWallets(address user) view returns (uint256[] memory)",
+        "function getActiveWalletCount(address user) view returns (uint256)",
+        "function getTotalWalletCount() view returns (uint256)",
+        "function walletExists(uint256 walletId) view returns (bool)",
         "function owner() view returns (address)"
       ];
       
@@ -121,10 +122,10 @@ export class EnhancedAuthorizationService {
         "function owner() view returns (address)"
       ];
       
-      // CRITICAL: Use AuthorizationManagerFixed as the main orchestrator contract
+      // CRITICAL: Use EmailDataWalletOS_Secure as the unified contract
       this.emailDataWalletContract = new ethers.Contract(
-        authorizationContractAddress,
-        authorizationABI,
+        emailDataWalletContractAddress,
+        emailDataWalletABI,
         this.serviceWallet
       );
       
@@ -134,11 +135,11 @@ export class EnhancedAuthorizationService {
         this.serviceWallet
       );
       
-      console.log('✅ Enhanced Authorization service initialized with ORCHESTRATOR pattern');
+      console.log('✅ Enhanced Authorization service initialized with UNIFIED CONTRACT pattern');
       console.log(`   Service Wallet: ${this.serviceWallet.address}`);
-      console.log(`   🎯 Authorization Contract (ORCHESTRATOR): ${authorizationContractAddress}`);
+      console.log(`   🎯 EmailDataWallet Contract (UNIFIED): ${emailDataWalletContractAddress}`);
       console.log(`   📊 Registration Contract: ${registrationContractAddress}`);
-      console.log(`   🔄 Using AuthorizationManagerFixed for complete ORIGIN flow`);
+      console.log(`   🔄 Using EmailDataWalletOS_Secure for direct wallet creation`);
       
     } catch (error) {
       console.error('❌ Failed to initialize enhanced authorization service:', error);
@@ -225,7 +226,7 @@ export class EnhancedAuthorizationService {
   }
   
   /**
-   * PROPER ORCHESTRATION: Use AuthorizationManagerFixed as the orchestrator
+   * UNIFIED CONTRACT: Create wallet directly using EmailDataWalletOS_Secure
    */
   async authorizeEmailWalletCreation(
     requestId: string,
@@ -234,7 +235,7 @@ export class EnhancedAuthorizationService {
   ): Promise<AuthorizationResult> {
     
     try {
-      console.log('🔐 Processing authorization through AuthorizationManagerFixed orchestrator...');
+      console.log('🔐 Processing authorization through UNIFIED CONTRACT...');
       console.log(`   Request ID: ${requestId}`);
       console.log(`   User Address: ${userAddress}`);
       
@@ -265,34 +266,44 @@ export class EnhancedAuthorizationService {
       }
       
       console.log('✅ Signature verified - user consent proven');
-      console.log('🎯 Calling AuthorizationManagerFixed.authorizeEmailWalletCreation()...');
+      console.log('🎯 Calling EmailDataWalletOS_Secure.createEmailDataWallet()...');
       
-      // Call AuthorizationManagerFixed orchestrator
-      // This will handle the complete ORIGIN flow:
-      // 1. Verify signature
-      // 2. Create EmailDataWallet
-      // 3. Deduct credits
-      // 4. Record provenance
-      // 5. Transfer ownership to user
-      const authorizeTx = await this.emailDataWalletContract.authorizeEmailWalletCreation(
-        requestId,
-        signature,
+      if (!request.emailData) {
+        throw new Error('Email data not found in request');
+      }
+      
+      // Deduct credits first
+      console.log(`💰 Deducting ${request.creditCost} credits from user...`);
+      const deductTx = await this.registrationContract.deductCredits(
+        userAddress,
+        request.creditCost,
+        {
+          gasLimit: 200000,
+          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+        }
+      );
+      await deductTx.wait();
+      console.log(`✅ Credits deducted: ${deductTx.hash}`);
+      
+      // Call EmailDataWalletOS_Secure.createEmailDataWallet with proper parameters
+      const createTx = await this.emailDataWalletContract.createEmailDataWallet(
+        userAddress,
+        request.emailData.emailHash || '',
+        request.emailData.subject || '',
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash)).substring(2), // Remove 0x prefix
+        request.emailData.from || '',
+        request.attachmentHashes || [],
+        JSON.stringify({ ipfsHash: request.ipfsHash, requestId, timestamp: new Date().toISOString() }),
         {
           gasLimit: 500000,
           gasPrice: ethers.utils.parseUnits('30', 'gwei')
         }
       );
       
-      console.log(`⏳ Authorization transaction submitted: ${authorizeTx.hash}`);
-      console.log('   AuthorizationManagerFixed will now:');
-      console.log('   1. Verify signature on-chain');
-      console.log('   2. Create EmailDataWallet automatically');
-      console.log('   3. Deduct credits from user');
-      console.log('   4. Record complete ORIGIN provenance');
-      console.log('   5. Transfer wallet ownership to user');
+      console.log(`⏳ EMAIL_DATA_WALLET creation transaction: ${createTx.hash}`);
       
-      const receipt = await authorizeTx.wait();
-      console.log(`✅ Authorization completed in block ${receipt.blockNumber}`);
+      const receipt = await createTx.wait();
+      console.log(`✅ EMAIL_DATA_WALLET created in block ${receipt.blockNumber}`);
       
       // Extract wallet ID from events
       const walletId = this.extractWalletIdFromReceipt(receipt);
@@ -300,9 +311,9 @@ export class EnhancedAuthorizationService {
       // Update request status in DATABASE
       await this.database.updateRequestStatus(requestId, 'processed');
       
-      console.log(`🎉 Complete ORIGIN flow executed by AuthorizationManagerFixed:`);
+      console.log(`🎉 Complete EMAIL_DATA_WALLET created via unified contract:`);
       console.log(`   Wallet ID: ${walletId}`);
-      console.log(`   Transaction: ${authorizeTx.hash}`);
+      console.log(`   Transaction: ${createTx.hash}`);
       console.log(`   Credits Deducted: ${request.creditCost}`);
       console.log(`   Owner: ${userAddress}`);
       
@@ -310,16 +321,16 @@ export class EnhancedAuthorizationService {
         success: true,
         requestId,
         emailWalletId: walletId || undefined,
-        attachmentWalletIds: [], // Handled by orchestrator
-        authorizationTx: authorizeTx.hash,
+        attachmentWalletIds: [],
+        authorizationTx: createTx.hash,
         totalCreditsUsed: request.creditCost
       };
       
     } catch (error: any) {
-      console.error('❌ Authorization orchestration failed:', error);
+      console.error('❌ Unified contract wallet creation failed:', error);
       return {
         success: false,
-        error: error?.message || 'Authorization orchestration failed'
+        error: error?.message || 'Unified contract wallet creation failed'
       };
     }
   }
@@ -495,9 +506,9 @@ export class EnhancedAuthorizationService {
           database: dbHealth.details,
           pendingRequests: dbStats.totalRequests,
           requestsByStatus: dbStats.byStatus,
-          orchestrator: 'AuthorizationManagerFixed',
-          orchestratorAddress: '0xcC2a65A8870289B1d43bA741069cC2CEEA219573',
-          architecture: 'ORIGIN flow orchestration pattern',
+          orchestrator: 'EmailDataWalletOS_Secure (Unified Contract)',
+          orchestratorAddress: '0x0eb8830FaC353A63E912861137b246CAC7FC5977',
+          architecture: 'Direct wallet creation via unified contract',
           persistent: true
         }
       };
