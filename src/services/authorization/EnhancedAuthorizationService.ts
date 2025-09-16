@@ -105,11 +105,13 @@ export class EnhancedAuthorizationService {
       
       // EmailDataWalletOS_Secure ABI - THE CORRECT DEPLOYED CONTRACT
       const emailDataWalletABI = [
-        "function createEmailDataWallet(string messageId, string subject, string fromAddress, string toAddress, bytes32 bodyHash, bytes32 emailHash, bytes32 headersHash, string ipfsHash, uint32 attachmentCount, bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature) returns (bytes32 walletId)",
-        "function getEmailData(bytes32 walletId) view returns (tuple(string messageId, string subject, string fromAddress, string toAddress, uint256 timestamp, bytes32 bodyHash, bytes32 emailHash, bytes32 headersHash, string ipfsHash, uint32 attachmentCount, bool spfPass, bool dkimValid, bool dmarcPass, string dkimSignature))",
-        "function ownership(bytes32 walletId) view returns (tuple(address primaryOwner, address[] secondaryOwners, bool isActive))",
-        "function ownerDataWallets(address owner, uint256 index) view returns (bytes32)",
-        "function totalDataWallets() view returns (uint256)"
+        "function createEmailDataWallet(address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, string metadata) returns (uint256)",
+        "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
+        "function getAllUserWallets(address userAddress) view returns (uint256[] memory)",
+        "function getActiveWalletCount(address userAddress) view returns (uint256)",
+        "function walletExists(uint256 walletId) view returns (bool)",
+        "function getTotalWalletCount() view returns (uint256)",
+        "function owner() view returns (address)"
       ];
       
       // Registration contract ABI
@@ -285,12 +287,8 @@ export class EnhancedAuthorizationService {
       
       // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters for deployed contract
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
-        request.emailData.messageId || `generated-${Date.now()}`,
-        request.emailData.subject || 'No Subject',
-        request.emailData.from || 'unknown@unknown.com',
-        'process@rivetz.com', // toAddress
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || 'empty')), // bodyHash
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
+        userAddress, // address userAddress
+        request.emailData.emailHash || ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
           JSON.stringify({
             subject: request.emailData.subject,
             from: request.emailData.from,
@@ -298,14 +296,12 @@ export class EnhancedAuthorizationService {
             messageId: request.emailData.messageId,
             timestamp: Date.now()
           })
-        )), // emailHash - unique combination ensuring no duplicates
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || { 'default': 'headers' }))), // headersHash - ensure non-empty input
-        request.ipfsHash || '',
-        request.attachmentCount || 0, // uint32 - use regular number, not BigNumber
-        true, // spfPass - SET TO TRUE to pass validation
-        true, // dkimValid - SET TO TRUE to pass validation
-        true, // dmarcPass - SET TO TRUE to pass validation
-        'valid-dkim-signature', // dkimSignature - Provide non-empty string
+        )), // string emailHash
+        request.emailData.subject || 'No Subject', // string subjectHash
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || 'empty')), // string contentHash (just use the hash as string)
+        request.emailData.from || 'unknown@unknown.com', // string senderHash
+        request.attachmentHashes || [], // string[] attachmentHashes
+        request.ipfsHash || '', // string metadata
         {
           gasLimit: 500000,
           gasPrice: ethers.utils.parseUnits('30', 'gwei')
