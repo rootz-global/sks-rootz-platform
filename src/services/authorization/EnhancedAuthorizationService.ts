@@ -289,9 +289,9 @@ export class EnhancedAuthorizationService {
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
         userAddress,
         request.emailData.emailHash || '',
-        request.emailData.subject || '',
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.subject || '')).substring(2), // Hash the subject
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash)).substring(2), // Remove 0x prefix
-        request.emailData.from || '',
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.from || '')).substring(2), // Hash the sender
         request.attachmentHashes || [],
         JSON.stringify({ ipfsHash: request.ipfsHash, requestId, timestamp: new Date().toISOString() }),
         {
