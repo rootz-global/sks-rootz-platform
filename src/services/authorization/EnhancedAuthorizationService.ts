@@ -317,12 +317,6 @@ export class EnhancedAuthorizationService {
       // PARAM 2: emailHash - MUST BE UNIQUE and under 500 chars
       const uniqueEmailHash = `email-${requestId.substring(2, 10)}-${Date.now()}`.substring(0, 60);
       
-      // TEMPORARILY DISABLED - Let contract handle emailHash collision
-      // const emailHashExists = await this.emailDataWalletContract.emailHashExists(uniqueEmailHash);
-      // if (emailHashExists) {
-      //   throw new Error(`Email hash collision detected: ${uniqueEmailHash}`);
-      // }
-      
       // PARAM 3: subjectHash - Non-empty, under 500 chars
       const subjectHash = (request.emailData.subject || 'No-Subject-Provided').substring(0, 400);
       
@@ -363,46 +357,92 @@ export class EnhancedAuthorizationService {
       console.log(`   Attachment Hashes: ${validatedAttachmentHashes.length} items`);
       console.log(`   Metadata: ${metadata.length} chars`);
       
-      // FINAL CONTRACT CALL WITH VALIDATED PARAMETERS
-      const createTx = await this.emailDataWalletContract.createEmailDataWallet(
-        validatedUserAddress,        // address userAddress
-        uniqueEmailHash,             // string emailHash (UNIQUE)
-        subjectHash,                 // string subjectHash (NON-EMPTY, <500)
-        contentHash,                 // string contentHash (NON-EMPTY, <500)  
-        senderHash,                  // string senderHash (NON-EMPTY, <500)
-        validatedAttachmentHashes,   // string[] attachmentHashes (ALL NON-EMPTY, <500)
-        metadata,                    // string metadata (NON-EMPTY, <500)
-        {
-          gasLimit: 500000,
-          gasPrice: ethers.utils.parseUnits('30', 'gwei')
+      // FINAL CONTRACT CALL WITH ENHANCED LOGGING
+      try {
+        console.log('🔍 ATTEMPTING GAS ESTIMATION...');
+        
+        // First, estimate gas to see what the contract expects
+        const gasEstimate = await this.emailDataWalletContract.estimateGas.createEmailDataWallet(
+          validatedUserAddress,
+          uniqueEmailHash,
+          subjectHash,
+          contentHash,
+          senderHash,
+          validatedAttachmentHashes,
+          metadata
+        );
+        
+        console.log(`📊 Gas estimate: ${gasEstimate.toString()} gas`);
+        
+        if (gasEstimate.gt(450000)) {
+          console.warn('⚠️ Gas estimate exceeds 450k - may indicate validation failure');
         }
-      );
+        
+        const createTx = await this.emailDataWalletContract.createEmailDataWallet(
+          validatedUserAddress,        // address userAddress
+          uniqueEmailHash,             // string emailHash (UNIQUE)
+          subjectHash,                 // string subjectHash (NON-EMPTY, <500)
+          contentHash,                 // string contentHash (NON-EMPTY, <500)  
+          senderHash,                  // string senderHash (NON-EMPTY, <500)
+          validatedAttachmentHashes,   // string[] attachmentHashes (ALL NON-EMPTY, <500)
+          metadata,                    // string metadata (NON-EMPTY, <500)
+          {
+            gasLimit: Math.max(gasEstimate.mul(120).div(100), 500000), // 20% buffer or 500k minimum
+            gasPrice: ethers.utils.parseUnits('30', 'gwei')
+          }
+        );
       
-      console.log(`⏳ EMAIL_DATA_WALLET creation transaction: ${createTx.hash}`);
-      
-      const receipt = await createTx.wait();
-      console.log(`✅ EMAIL_DATA_WALLET created in block ${receipt.blockNumber}`);
-      
-      // Extract wallet ID from events
-      const walletId = this.extractWalletIdFromReceipt(receipt);
-      
-      // Update request status in DATABASE
-      await this.database.updateRequestStatus(requestId, 'processed');
-      
-      console.log(`🎉 Complete EMAIL_DATA_WALLET created via unified contract:`);
-      console.log(`   Wallet ID: ${walletId}`);
-      console.log(`   Transaction: ${createTx.hash}`);
-      console.log(`   Credits Deducted: ${request.creditCost}`);
-      console.log(`   Owner: ${userAddress}`);
-      
-      return {
-        success: true,
-        requestId,
-        emailWalletId: walletId || undefined,
-        attachmentWalletIds: [],
-        authorizationTx: createTx.hash,
-        totalCreditsUsed: request.creditCost
-      };
+        console.log(`⏳ EMAIL_DATA_WALLET creation transaction: ${createTx.hash}`);
+        
+        const receipt = await createTx.wait();
+        console.log(`✅ EMAIL_DATA_WALLET created in block ${receipt.blockNumber}`);
+        
+        // Extract wallet ID from events
+        const walletId = this.extractWalletIdFromReceipt(receipt);
+        
+        // Update request status in DATABASE
+        await this.database.updateRequestStatus(requestId, 'processed');
+        
+        console.log(`🎉 Complete EMAIL_DATA_WALLET created via unified contract:`);
+        console.log(`   Wallet ID: ${walletId}`);
+        console.log(`   Transaction: ${createTx.hash}`);
+        console.log(`   Credits Deducted: ${request.creditCost}`);
+        console.log(`   Owner: ${userAddress}`);
+        
+        return {
+          success: true,
+          requestId,
+          emailWalletId: walletId || undefined,
+          attachmentWalletIds: [],
+          authorizationTx: createTx.hash,
+          totalCreditsUsed: request.creditCost
+        };
+        
+      } catch (gasEstimationError: any) {
+        console.error('❌ GAS ESTIMATION FAILED - Contract will revert:');
+        console.error('   Error:', gasEstimationError.message);
+        console.error('   Reason:', gasEstimationError.reason || 'None provided');
+        
+        if (gasEstimationError.message?.includes('EmailHashAlreadyExists')) {
+          console.error(`   CAUSE: Email hash collision: ${uniqueEmailHash}`);
+        } else if (gasEstimationError.message?.includes('InvalidStringLength')) {
+          console.error('   CAUSE: Parameter exceeds 500 character limit');
+          console.error('   Check: emailHash, subjectHash, contentHash, senderHash, metadata lengths');
+        } else if (gasEstimationError.message?.includes('InvalidHashValue')) {
+          console.error('   CAUSE: Empty parameter detected');
+          console.error('   Check: emailHash, subjectHash, contentHash, senderHash are non-empty');
+        } else if (gasEstimationError.message?.includes('MaxWalletsExceeded')) {
+          console.error('   CAUSE: User has reached maximum wallet limit (1000)');
+        } else if (gasEstimationError.message?.includes('InvalidAttachmentCount')) {
+          console.error('   CAUSE: Too many attachments (max 100)');
+          console.error(`   Attachment count: ${validatedAttachmentHashes.length}`);
+        } else {
+          console.error('   CAUSE: Unknown contract validation failure');
+          console.error('   Full error object:', JSON.stringify(gasEstimationError, null, 2));
+        }
+        
+        throw new Error(`Gas estimation failed: ${gasEstimationError.reason || gasEstimationError.message}`);
+      }
       
     } catch (error: any) {
       console.error('❌ Unified contract wallet creation failed:', error);
