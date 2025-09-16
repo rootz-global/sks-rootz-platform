@@ -81,7 +81,7 @@ export class EnhancedAuthorizationService {
       const rpcUrl = this.config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
       const privateKey = this.config.get('blockchain.serviceWalletPrivateKey');
       const authorizationContractAddress = ethers.utils.getAddress(
-        this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d43bA741069cC2CEEA219573').toLowerCase()
+        this.config.get('blockchain.contractAuthorization', '0xcC2a65A8870289B1d43bA741069cC2CEEA219573')!.toLowerCase()
       );
       const registrationContractAddress = ethers.utils.getAddress(
         this.config.get('blockchain.contractRegistration')!.toLowerCase()
