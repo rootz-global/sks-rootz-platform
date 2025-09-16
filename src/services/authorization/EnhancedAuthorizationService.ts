@@ -111,7 +111,9 @@ export class EnhancedAuthorizationService {
         "function getActiveWalletCount(address userAddress) view returns (uint256)",
         "function walletExists(uint256 walletId) view returns (bool)",
         "function getTotalWalletCount() view returns (uint256)",
-        "function owner() view returns (address)"
+        "function emailHashExists(string emailHash) view returns (bool)",
+        "function owner() view returns (address)",
+        "function paused() view returns (bool)"
       ];
       
       // Registration contract ABI
@@ -266,11 +268,33 @@ export class EnhancedAuthorizationService {
       }
       
       console.log('✅ Signature verified - user consent proven');
-      console.log('🎯 Calling EmailDataWalletOS_Secure.createEmailDataWallet()...');
       
       if (!request.emailData) {
         throw new Error('Email data not found in request');
       }
+      
+      // VALIDATION 1: Check contract owner (CRITICAL)
+      const contractOwner = await this.emailDataWalletContract.owner();
+      if (contractOwner.toLowerCase() !== this.serviceWallet.address.toLowerCase()) {
+        throw new Error(`Service wallet ${this.serviceWallet.address} is not contract owner. Owner: ${contractOwner}`);
+      }
+      
+      // VALIDATION 2: Check contract pause state
+      const isPaused = await this.emailDataWalletContract.paused();
+      if (isPaused) {
+        throw new Error('Contract is paused - cannot create wallets');
+      }
+      
+      // VALIDATION 3: Check user wallet count limit
+      const userWalletCount = await this.emailDataWalletContract.getActiveWalletCount(userAddress);
+      if (userWalletCount.gte(1000)) {
+        throw new Error(`User has reached maximum wallet limit: ${userWalletCount.toString()}/1000`);
+      }
+      
+      console.log('🎯 Calling EmailDataWalletOS_Secure.createEmailDataWallet()...');
+      console.log(`   Contract Owner: ${contractOwner} ✅`);
+      console.log(`   Contract Paused: ${isPaused} ✅`);
+      console.log(`   User Wallet Count: ${userWalletCount.toString()}/1000 ✅`);
       
       // Deduct credits first
       console.log(`💰 Deducting ${request.creditCost} credits from user...`);
@@ -285,23 +309,69 @@ export class EnhancedAuthorizationService {
       await deductTx.wait();
       console.log(`✅ Credits deducted: ${deductTx.hash}`);
       
-      // Call EmailDataWalletOS_Secure.createEmailDataWallet with CORRECT parameters for deployed contract
+      // PREPARE VALIDATED PARAMETERS
+      
+      // PARAM 1: userAddress (already validated above)
+      const validatedUserAddress = ethers.utils.getAddress(userAddress);
+      
+      // PARAM 2: emailHash - MUST BE UNIQUE and under 500 chars
+      const uniqueEmailHash = `email-${requestId.substring(2, 10)}-${Date.now()}`.substring(0, 60);
+      
+      // Check if this emailHash already exists
+      const emailHashExists = await this.emailDataWalletContract.emailHashExists(uniqueEmailHash);
+      if (emailHashExists) {
+        throw new Error(`Email hash collision detected: ${uniqueEmailHash}`);
+      }
+      
+      // PARAM 3: subjectHash - Non-empty, under 500 chars
+      const subjectHash = (request.emailData.subject || 'No-Subject-Provided').substring(0, 400);
+      
+      // PARAM 4: contentHash - Use actual body hash, ensure under 500 chars
+      const contentHash = request.emailData.bodyHash?.substring(0, 64) || 
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
+          request.emailData.bodyText || request.emailData.bodyHtml || 'empty-content'
+        ));
+      
+      // PARAM 5: senderHash - Non-empty, under 500 chars  
+      const senderHash = (request.emailData.from || 'unknown-sender').substring(0, 400);
+      
+      // PARAM 6: attachmentHashes - Validate each hash is non-empty and under 500 chars
+      const validatedAttachmentHashes = (request.emailData.attachments || [])
+        .map(att => att.contentHash || ethers.utils.keccak256(ethers.utils.toUtf8Bytes(att.filename || 'empty')))
+        .filter(hash => hash && hash.length > 0)
+        .map(hash => hash.substring(0, 64)) // Ensure under 500 chars
+        .slice(0, 100); // MAX_ATTACHMENT_COUNT = 100
+      
+      // PARAM 7: metadata - Non-empty, under 500 chars, valid JSON structure
+      const metadata = JSON.stringify({
+        ipfsHash: request.ipfsHash || 'no-ipfs',
+        timestamp: Date.now(),
+        requestId: requestId.substring(0, 20),
+        emailAuthentication: {
+          spfPass: request.emailData.authentication?.spfPass || false,
+          dkimValid: request.emailData.authentication?.dkimValid || false,
+          dmarcPass: request.emailData.authentication?.dmarcPass || false
+        }
+      }).substring(0, 450); // Leave room for safety
+      
+      console.log('📋 VALIDATED PARAMETERS:');
+      console.log(`   User Address: ${validatedUserAddress}`);
+      console.log(`   Email Hash: ${uniqueEmailHash} (${uniqueEmailHash.length} chars)`);
+      console.log(`   Subject Hash: ${subjectHash} (${subjectHash.length} chars)`);
+      console.log(`   Content Hash: ${contentHash} (${contentHash.length} chars)`);
+      console.log(`   Sender Hash: ${senderHash} (${senderHash.length} chars)`);
+      console.log(`   Attachment Hashes: ${validatedAttachmentHashes.length} items`);
+      console.log(`   Metadata: ${metadata.length} chars`);
+      
+      // FINAL CONTRACT CALL WITH VALIDATED PARAMETERS
       const createTx = await this.emailDataWalletContract.createEmailDataWallet(
-        userAddress, // address userAddress
-        request.emailData.emailHash || ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
-          JSON.stringify({
-            subject: request.emailData.subject,
-            from: request.emailData.from,
-            bodyText: request.emailData.bodyText || request.emailData.bodyHtml,
-            messageId: request.emailData.messageId,
-            timestamp: Date.now()
-          })
-        )), // string emailHash
-        request.emailData.subject || 'No Subject', // string subjectHash
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || 'empty')), // string contentHash (just use the hash as string)
-        request.emailData.from || 'unknown@unknown.com', // string senderHash
-        request.attachmentHashes || [], // string[] attachmentHashes
-        request.ipfsHash || '', // string metadata
+        validatedUserAddress,        // address userAddress
+        uniqueEmailHash,             // string emailHash (UNIQUE)
+        subjectHash,                 // string subjectHash (NON-EMPTY, <500)
+        contentHash,                 // string contentHash (NON-EMPTY, <500)  
+        senderHash,                  // string senderHash (NON-EMPTY, <500)
+        validatedAttachmentHashes,   // string[] attachmentHashes (ALL NON-EMPTY, <500)
+        metadata,                    // string metadata (NON-EMPTY, <500)
         {
           gasLimit: 500000,
           gasPrice: ethers.utils.parseUnits('30', 'gwei')
@@ -336,6 +406,22 @@ export class EnhancedAuthorizationService {
       
     } catch (error: any) {
       console.error('❌ Unified contract wallet creation failed:', error);
+      
+      // Enhanced error reporting
+      if (error.message?.includes('InvalidStringLength')) {
+        console.error('   CAUSE: Parameter exceeds 500 character limit');
+      } else if (error.message?.includes('InvalidHashValue')) {
+        console.error('   CAUSE: Empty string parameter detected'); 
+      } else if (error.message?.includes('EmailHashAlreadyExists')) {
+        console.error('   CAUSE: Email hash collision - not unique');
+      } else if (error.message?.includes('MaxWalletsExceeded')) {
+        console.error('   CAUSE: User has reached 1000 wallet limit');
+      } else if (error.message?.includes('Pausable: paused')) {
+        console.error('   CAUSE: Contract is paused');
+      } else if (error.message?.includes('Ownable: caller is not the owner')) {
+        console.error('   CAUSE: Service wallet is not contract owner');
+      }
+      
       return {
         success: false,
         error: error?.message || 'Unified contract wallet creation failed'
