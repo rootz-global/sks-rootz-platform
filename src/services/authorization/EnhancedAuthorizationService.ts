@@ -301,7 +301,7 @@ export class EnhancedAuthorizationService {
         )), // emailHash - unique combination ensuring no duplicates
         ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || { 'default': 'headers' }))), // headersHash - ensure non-empty input
         request.ipfsHash || '',
-        ethers.BigNumber.from(request.attachmentCount || 0), // uint256 not uint32
+        request.attachmentCount || 0, // uint32 - use regular number, not BigNumber
         true, // spfPass - SET TO TRUE to pass validation
         true, // dkimValid - SET TO TRUE to pass validation
         true, // dmarcPass - SET TO TRUE to pass validation
