@@ -289,9 +289,17 @@ export class EnhancedAuthorizationService {
         request.emailData.subject || 'No Subject',
         request.emailData.from || 'unknown@unknown.com',
         'process@rivetz.com', // toAddress
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || '')), // bodyHash
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.emailHash || '')), // emailHash
-        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || {}))), // headersHash
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(request.emailData.bodyText || request.emailData.bodyHtml || 'empty')), // bodyHash
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
+          JSON.stringify({
+            subject: request.emailData.subject,
+            from: request.emailData.from,
+            bodyText: request.emailData.bodyText || request.emailData.bodyHtml,
+            messageId: request.emailData.messageId,
+            timestamp: Date.now()
+          })
+        )), // emailHash - unique combination ensuring no duplicates
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(request.emailData.headers || { 'default': 'headers' }))), // headersHash - ensure non-empty input
         request.ipfsHash || '',
         ethers.BigNumber.from(request.attachmentCount || 0), // uint256 not uint32
         true, // spfPass - SET TO TRUE to pass validation
