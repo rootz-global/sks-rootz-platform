@@ -390,14 +390,34 @@ export class GraphEmailMonitorService {
   }
 
   private async determineRecipientWallet(emailData: EmailData): Promise<string | null> {
-    // Implementation depends on your routing logic
-    // For now, return a test wallet address if sender is known
-    const knownSenders: { [key: string]: string } = {
-      'steven@sprague.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b',
-      'demo@techcorp.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b'
-    };
+    try {
+      const senderEmail = emailData.sender.address;
+      console.log(`🔍 Looking up wallet for sender: ${senderEmail}`);
 
-    return knownSenders[emailData.sender.address] || null;
+      if (!this.blockchainService) {
+        console.error('❌ Blockchain service not available for email lookup');
+        return null;
+      }
+
+      // Use blockchain registration system to find wallet by email
+      try {
+        const registration = await this.blockchainService.getRegistrationByEmail(senderEmail);
+        if (registration && registration.walletAddress) {
+          console.log(`✅ Found registered wallet for ${senderEmail}: ${registration.walletAddress}`);
+          return registration.walletAddress;
+        }
+      } catch (blockchainError) {
+        console.log(`⚠️ Blockchain lookup failed for ${senderEmail}:`, blockchainError.message);
+      }
+
+      console.log(`❌ No registered wallet found for sender: ${senderEmail}`);
+      console.log(`💡 User must register at: http://rootz.global/register-test.html`);
+      return null;
+
+    } catch (error) {
+      console.error('Error in determineRecipientWallet:', error);
+      return null;
+    }
   }
 
   private async createWalletProposal(emailData: EmailData, recipientAddress: string): Promise<ProcessedEmail> {
