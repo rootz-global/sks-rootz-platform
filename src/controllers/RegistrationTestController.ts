@@ -68,10 +68,14 @@ export class RegistrationTestController {
 
             console.log(`[CREDIT] Depositing ${ethers.utils.formatEther(polAmount)} POL for ${creditAmount} credits`);
 
-            // Call depositCredits with POL payment
+            // Call depositCredits with POL payment and proper gas pricing for Polygon
+            const feeData = await this.provider.getFeeData();
+            const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('30', 'gwei'); // Minimum 30 Gwei for Polygon
+            
             const tx = await registrationContract.depositCredits(address, {
                 value: polAmount,
-                gasLimit: 200000
+                gasLimit: 200000,
+                gasPrice: gasPrice
             });
 
             console.log(`[CREDIT] Transaction submitted: ${tx.hash}`);
@@ -98,6 +102,87 @@ export class RegistrationTestController {
 
         } catch (error) {
             console.error('[CREDIT] Error granting credits:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({
+                success: false,
+                error: errorMessage,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    /**
+     * Test endpoint: Check credit balance for a wallet
+     * GET /.rootz/test/check-credits?address=0x30e1eA3dfDA0dD9694685B72Cde17E31c0f43e77
+     */
+    async checkCredits(req: Request, res: Response): Promise<void> {
+        try {
+            const { address } = req.query;
+
+            if (!address || typeof address !== 'string') {
+                res.status(400).json({
+                    success: false,
+                    error: 'Address parameter required',
+                    timestamp: new Date().toISOString()
+                });
+                return;
+            }
+
+            console.log(`[CREDIT] Checking credit balance for: ${address}`);
+
+            // Get registration contract
+            const registrationContractAddress = this.configService.get('blockchain.contractRegistration');
+            const registrationAbi = [
+                "function getCreditBalance(address wallet) view returns (uint256)",
+                "function isRegistered(address wallet) view returns (bool)"
+            ];
+
+            const registrationContract = new ethers.Contract(
+                registrationContractAddress,
+                registrationAbi,
+                this.provider // Read-only, no need for service wallet
+            );
+
+            // Check if user is registered first
+            const isRegistered = await registrationContract.isRegistered(address);
+            
+            if (!isRegistered) {
+                res.json({
+                    success: false,
+                    address: address,
+                    isRegistered: false,
+                    message: 'Wallet is not registered',
+                    timestamp: new Date().toISOString()
+                });
+                return;
+            }
+
+            // Get credit balance
+            const balance = await registrationContract.getCreditBalance(address);
+            const balanceNumber = balance.toString();
+
+            console.log(`[CREDIT] Credit balance for ${address}: ${balanceNumber}`);
+
+            // Determine if balance is suspiciously high (billion+ credits)
+            const isSuspiciouslyHigh = balance.gt(ethers.BigNumber.from('1000000000')); // 1 billion
+            const isZero = balance.eq(0);
+
+            res.json({
+                success: true,
+                address: address,
+                isRegistered: true,
+                creditBalance: balanceNumber,
+                balanceStatus: {
+                    isZero: isZero,
+                    isSuspiciouslyHigh: isSuspiciouslyHigh,
+                    needsCredits: isZero,
+                    sufficientForEmail: balance.gte(4) // Need 4 credits for email wallet
+                },
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('[CREDIT] Error checking credits:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             res.status(500).json({
                 success: false,
