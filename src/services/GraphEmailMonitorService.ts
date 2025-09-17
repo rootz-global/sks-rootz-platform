@@ -37,7 +37,7 @@ export class GraphEmailMonitorService {
   private config: any;
   private configService: ConfigService;
   private blockchainService: BlockchainService | null = null;
-  private registrationLookupService: RegistrationLookupService;
+  private registrationLookupService!: RegistrationLookupService;
   private isRunning: boolean = false;
   private monitoringInterval: NodeJS.Timer | null = null;
   private lastProcessedTime: Date;
