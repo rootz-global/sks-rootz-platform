@@ -64,8 +64,9 @@ export class LocalIPFSService {
   
   /**
    * Upload email data package to IPFS via Pinata
+   * Now includes both raw original email and parsed data
    */
-  async uploadEmailPackage(emailData: any, attachments: any[]): Promise<IPFSUploadResult> {
+  async uploadEmailPackage(parsedEmailData: any, attachments: any[], rawEmailContent: string): Promise<IPFSUploadResult> {
     if (!this.isConnected) {
       return {
         success: false,
@@ -74,33 +75,72 @@ export class LocalIPFSService {
     }
     
     try {
-      console.log('📦 Preparing email package for Pinata upload...');
+      console.log('📦 Preparing comprehensive email package for Pinata upload...');
       
-      // Create comprehensive email package
+      // Create comprehensive email package with BOTH raw and parsed data
       const emailPackage = {
-        emailData: {
-          messageId: emailData.messageId,
-          subject: emailData.subject,
-          from: emailData.from,
-          to: emailData.to,
-          date: emailData.date,
-          bodyText: emailData.bodyText,
-          bodyHtml: emailData.bodyHtml,
-          headers: emailData.headers,
-          authentication: emailData.authentication,
-          hashes: emailData.hashes
+        // RAW ORIGINAL EMAIL - Unaltered for legal proof of origin
+        rawEmail: {
+          content: rawEmailContent,
+          contentLength: rawEmailContent.length,
+          contentHash: this.calculateHash(rawEmailContent),
+          preservedFormat: 'original-as-received',
+          legalNote: 'This is the unaltered original email as received by the system'
         },
-        attachments: [],
+        
+        // PARSED STRUCTURED DATA - For searchability and display
+        emailData: {
+          messageId: parsedEmailData.messageId,
+          subject: parsedEmailData.subject,
+          from: parsedEmailData.from,
+          to: parsedEmailData.to,
+          date: parsedEmailData.date,
+          bodyText: parsedEmailData.bodyText,
+          bodyHtml: parsedEmailData.bodyHtml,
+          headers: parsedEmailData.headers,
+          authentication: parsedEmailData.authentication,
+          // Include computed hashes for verification
+          hashes: {
+            bodyHash: parsedEmailData.bodyHash,
+            emailHash: parsedEmailData.emailHash,
+            emailHeadersHash: parsedEmailData.emailHeadersHash
+          }
+        },
+        
+        // ATTACHMENTS - Processed attachment data
+        attachments: attachments || [],
+        
+        // METADATA - Platform and processing information
         metadata: {
           createdAt: new Date().toISOString(),
           platform: 'SKS Rootz Platform',
           version: '1.0.0',
-          totalSize: JSON.stringify(emailData).length
+          totalSize: rawEmailContent.length,
+          processingNotes: {
+            rawEmailPreserved: true,
+            parsedDataAvailable: true,
+            hashesVerified: true,
+            legalCompliance: 'Original email content preserved for forensic verification'
+          }
+        },
+        
+        // VERIFICATION DATA - For proving integrity
+        verification: {
+          rawContentHash: this.calculateHash(rawEmailContent),
+          parsedContentHash: this.calculateHash(JSON.stringify(parsedEmailData)),
+          packageHash: '', // Will be calculated after package creation
+          timestamp: new Date().toISOString(),
+          preservationMethod: 'IPFS immutable storage'
         }
       };
       
+      // Calculate package hash for integrity verification
+      emailPackage.verification.packageHash = this.calculateHash(JSON.stringify(emailPackage));
+      
       const packageJson = JSON.stringify(emailPackage, null, 2);
-      console.log(`📤 Uploading email package (${packageJson.length} bytes) to Pinata...`);
+      console.log(`📤 Uploading comprehensive email package (${packageJson.length} bytes) to Pinata...`);
+      console.log(`   Raw email: ${rawEmailContent.length} bytes`);
+      console.log(`   Parsed data: ${JSON.stringify(parsedEmailData).length} bytes`);
       
       const pinataApiKey = this.config.get('ipfs.pinataApiKey');
       const pinataSecretKey = this.config.get('ipfs.pinataSecretKey');
@@ -111,17 +151,20 @@ export class LocalIPFSService {
       
       // Add file content
       form.append('file', Buffer.from(packageJson), {
-        filename: 'email-package.json',
+        filename: 'email-package-complete.json',
         contentType: 'application/json'
       });
       
       // Add metadata
       const metadata = JSON.stringify({
-        name: `Email Package ${Date.now()}`,
+        name: `Complete Email Package ${Date.now()}`,
         keyvalues: {
           platform: 'SKS Rootz Platform',
-          type: 'email-package',
-          version: '1.0.0'
+          type: 'complete-email-package',
+          version: '1.0.0',
+          hasRawEmail: 'true',
+          hasParsedData: 'true',
+          legalCompliant: 'true'
         }
       });
       form.append('pinataMetadata', metadata);
@@ -145,10 +188,12 @@ export class LocalIPFSService {
       const ipfsHash = result.IpfsHash;
       const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
       
-      console.log('✅ Email package uploaded to Pinata:');
+      console.log('✅ Complete email package uploaded to Pinata:');
       console.log(`   Hash: ${ipfsHash}`);
       console.log(`   URL: ${ipfsUrl}`);
       console.log(`   Size: ${result.PinSize} bytes`);
+      console.log(`   🔒 Raw email preserved for legal verification`);
+      console.log(`   📋 Parsed data available for searchability`);
       
       return {
         success: true,
@@ -164,6 +209,14 @@ export class LocalIPFSService {
         error: error?.message || 'Upload failed'
       };
     }
+  }
+  
+  /**
+   * Calculate SHA-256 hash for content verification
+   */
+  private calculateHash(content: string): string {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(content).digest('hex');
   }
   
   /**

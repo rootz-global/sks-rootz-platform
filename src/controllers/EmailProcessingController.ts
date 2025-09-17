@@ -94,7 +94,7 @@ export class EmailProcessingController {
         }
       };
 
-      const ipfsResult = await this.ipfsService.uploadEmailPackage(emailPackage, []);
+      const ipfsResult = await this.ipfsService.uploadEmailPackage(parsedEmail, [], rawEmail);
       
       if (!ipfsResult.success) {
         res.status(500).json({
@@ -129,15 +129,15 @@ export class EmailProcessingController {
       // Step 4: Generate email summary
       const attachmentCount = parsedEmail.attachments?.length || 0;
       const emailSummary = `📧 Email Summary:
-  From: ${emailPackage.emailData.from}
-  To: ${Array.isArray(emailPackage.emailData.to) ? emailPackage.emailData.to.join(', ') : emailPackage.emailData.to}
-  Subject: ${emailPackage.emailData.subject}
-  Date: ${emailPackage.emailData.date}
-  Body Length: ${(emailPackage.emailData.bodyText || '').length} chars
+  From: ${parsedEmail.from}
+  To: ${Array.isArray(parsedEmail.to) ? parsedEmail.to.join(', ') : parsedEmail.to}
+  Subject: ${parsedEmail.subject}
+  Date: ${parsedEmail.date}
+  Body Length: ${(parsedEmail.bodyText || '').length} chars
   Attachments: ${attachmentCount}
-  Auth: SPF=${emailPackage.emailData.authentication.spfPass} DKIM=${emailPackage.emailData.authentication.dkimValid} DMARC=${emailPackage.emailData.authentication.dmarcPass}
-  Email Hash: ${emailPackage.emailData.hashes.emailHash.replace('0x', '')}
-  Body Hash: ${emailPackage.emailData.hashes.bodyHash.replace('0x', '')}`;
+  Auth: SPF=${parsedEmail.authentication.spfPass} DKIM=${parsedEmail.authentication.dkimValid} DMARC=${parsedEmail.authentication.dmarcPass}
+  Email Hash: ${parsedEmail.emailHash.replace('0x', '')}
+  Body Hash: ${parsedEmail.bodyHash.replace('0x', '')}`;
 
       // Step 5: Create authorization URL for existing web interface
       const authorizationUrl = `http://rootz.global/static/services/email-data-wallet/authorization.html?token=${authToken}&request=${authResult.requestId}`;

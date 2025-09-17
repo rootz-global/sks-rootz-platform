@@ -196,6 +196,7 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
     const authService = getSharedAuthService(req);
     const config = req.app.locals.config;
     const { ethers } = require('ethers');
+    const fetch = require('node-fetch');
     
     // Initialize blockchain connection
     const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
@@ -230,7 +231,6 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
         
         // Fetch from IPFS via Pinata gateway
         const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-        const fetch = require('node-fetch');
         
         const ipfsResponse = await fetch(ipfsUrl);
         if (ipfsResponse.ok) {
@@ -243,7 +243,7 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
             console.log('📋 IPFS content is structured JSON');
             
             if (ipfsJson.emailData) {
-              // Extract email data from JSON structure
+              // NEW FORMAT: Complete email package with raw + parsed data
               const emailDataObj = ipfsJson.emailData;
               
               parsedEmailData = {
@@ -251,14 +251,17 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
                 from: emailDataObj.from || emailDataObj.sender || 'Unknown Sender',
                 to: emailDataObj.to || emailDataObj.recipient || 'process@rivetz.com',
                 date: emailDataObj.date || emailDataObj.timestamp || ipfsJson.metadata?.createdAt,
-                body: emailDataObj.body || emailDataObj.content || emailDataObj.message || 'No content available',
+                body: emailDataObj.bodyText || emailDataObj.bodyHtml || emailDataObj.content || 'No content available',
                 headers: emailDataObj.headers || [],
-                bodyLength: (emailDataObj.body || emailDataObj.content || '').length,
+                bodyLength: (emailDataObj.bodyText || emailDataObj.bodyHtml || '').length,
                 attachments: ipfsJson.attachments || [],
-                metadata: ipfsJson.metadata || {}
+                metadata: ipfsJson.metadata || {},
+                // NEW: Include raw email data if available
+                rawEmail: ipfsJson.rawEmail || null,
+                verification: ipfsJson.verification || null
               };
               
-              console.log(`✅ Parsed structured email data: ${parsedEmailData.subject}`);
+              console.log(`✅ Parsed complete email package: ${parsedEmailData.subject}`);
             } else {
               console.warn('⚠️ IPFS JSON does not contain emailData object');
               parsedEmailData = {
@@ -269,7 +272,8 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
                 body: JSON.stringify(ipfsJson, null, 2),
                 headers: [],
                 bodyLength: JSON.stringify(ipfsJson).length,
-                attachments: ipfsJson.attachments || []
+                attachments: ipfsJson.attachments || [],
+                rawEmail: ipfsJson.rawEmail || null
               };
             }
           } catch (jsonError) {
