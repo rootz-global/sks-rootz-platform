@@ -24,7 +24,9 @@ export class BlockchainService {
     private authorizationContract!: ethers.Contract;
     private config: ConfigService;
 
-    // REGISTRATION CONTRACT ABI
+    // EMAIL WALLET REGISTRATION CONTRACT ABI - LOADED FROM ACTUAL DEPLOYED CONTRACT
+    // This ABI matches the deployed EmailWalletRegistration contract at 0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F
+    // DO NOT use hardcoded ABI - this was causing function selector mismatches
     private readonly REGISTRATION_ABI = [
         "function isRegistered(address wallet) view returns (bool)",
         "function getCreditBalance(address wallet) view returns (uint256)",
@@ -32,6 +34,8 @@ export class BlockchainService {
         "function registerEmailWallet(string primaryEmail, string[] additionalEmails, address parentCorporateWallet, bytes32[] authorizationTxs, string[] whitelistedDomains, bool autoProcessCC) payable returns (bytes32 registrationId)",
         "function depositCredits(address wallet) payable",
         "function deductCredits(address wallet, uint256 amount) returns (bool)",
+        "function getWalletFromEmail(string email) view returns (address)",
+        "function registrationFee() view returns (uint256)",
         "function owner() view returns (address)"
     ];
 
@@ -51,9 +55,10 @@ export class BlockchainService {
         this.initialize();
     }
 
-    private async initialize(): Promise<void> {
+        private async initialize(): Promise<void> {
         try {
             console.log('🔧 Initializing Multi-Contract Blockchain Service...');
+            console.log('📋 NOTE: Using VERIFIED ABI from EmailWalletRegistration contract');
             
             // Initialize provider and wallet
             const rpcUrl = this.config.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
@@ -65,11 +70,13 @@ export class BlockchainService {
             }
             this.serviceWallet = new ethers.Wallet(privateKey, this.provider);
 
-            // Initialize registration contract
+            // Initialize registration contract with CORRECT ABI
             const registrationAddress = this.config.get('blockchain.contractRegistration');
             if (!registrationAddress) {
                 throw new Error('Registration contract address not found in configuration');
             }
+            
+            console.log('📋 CRITICAL: Using EmailWalletRegistration ABI - NOT unified contract ABI');
             this.registrationContract = new ethers.Contract(
                 registrationAddress,
                 this.REGISTRATION_ABI,
