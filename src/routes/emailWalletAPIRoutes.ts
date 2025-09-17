@@ -237,8 +237,46 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
           rawEmailContent = await ipfsResponse.text();
           console.log(`✅ Retrieved ${rawEmailContent.length} characters from IPFS`);
           
-          // Parse email content (basic parsing)
-          parsedEmailData = parseEmailContent(rawEmailContent);
+          // Try to parse as JSON first (SKS platform format)
+          try {
+            const ipfsJson = JSON.parse(rawEmailContent);
+            console.log('📋 IPFS content is structured JSON');
+            
+            if (ipfsJson.emailData) {
+              // Extract email data from JSON structure
+              const emailDataObj = ipfsJson.emailData;
+              
+              parsedEmailData = {
+                subject: emailDataObj.subject || 'No Subject',
+                from: emailDataObj.from || emailDataObj.sender || 'Unknown Sender',
+                to: emailDataObj.to || emailDataObj.recipient || 'process@rivetz.com',
+                date: emailDataObj.date || emailDataObj.timestamp || ipfsJson.metadata?.createdAt,
+                body: emailDataObj.body || emailDataObj.content || emailDataObj.message || 'No content available',
+                headers: emailDataObj.headers || [],
+                bodyLength: (emailDataObj.body || emailDataObj.content || '').length,
+                attachments: ipfsJson.attachments || [],
+                metadata: ipfsJson.metadata || {}
+              };
+              
+              console.log(`✅ Parsed structured email data: ${parsedEmailData.subject}`);
+            } else {
+              console.warn('⚠️ IPFS JSON does not contain emailData object');
+              parsedEmailData = {
+                subject: 'Data available in IPFS',
+                from: 'Unknown',
+                to: 'process@rivetz.com',
+                date: ipfsJson.metadata?.createdAt || 'Unknown',
+                body: JSON.stringify(ipfsJson, null, 2),
+                headers: [],
+                bodyLength: JSON.stringify(ipfsJson).length,
+                attachments: ipfsJson.attachments || []
+              };
+            }
+          } catch (jsonError) {
+            // Not JSON, treat as raw email content
+            console.log('📧 IPFS content is raw email text');
+            parsedEmailData = parseEmailContent(rawEmailContent);
+          }
         } else {
           console.warn(`⚠️ IPFS fetch failed: ${ipfsResponse.status}`);
         }
