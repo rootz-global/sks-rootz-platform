@@ -1,3 +1,83 @@
+// POST /email-wallet/deposit-credits/:userAddress
+router.post('/deposit-credits/:userAddress', async (req: Request, res: Response) => {
+  try {
+    const { userAddress } = req.params;
+    const { amount = '0.01' } = req.body; // Default 0.01 POL = ~60 credits
+    
+    if (!userAddress) {
+      return sendError(res, 'User address is required', 400);
+    }
+
+    console.log(`💰 Depositing ${amount} POL credits for user: ${userAddress}`);
+    
+    const authService = getSharedAuthService(req);
+    const config = req.app.locals.config;
+    const { ethers } = require('ethers');
+    
+    // Initialize blockchain connection
+    const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
+    const privateKey = config.get('blockchain.serviceWalletPrivateKey');
+    const registrationAddress = config.get('blockchain.contractRegistration', '0x71C1d6a0DAB73b25dE970E032bafD42a29dC010F');
+    
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const serviceWallet = new ethers.Wallet(privateKey, provider);
+    
+    // Registration contract ABI for credit deposits
+    const contractABI = [
+      "function depositCredits(address wallet) payable",
+      "function getCreditBalance(address wallet) view returns (uint256)"
+    ];
+    
+    const contract = new ethers.Contract(registrationAddress, contractABI, serviceWallet);
+    
+    // Check current balance before deposit
+    const currentCredits = await contract.getCreditBalance(userAddress);
+    console.log(`📋 Current credits: ${currentCredits.toString()}`);
+    
+    // Deposit credits
+    const depositAmount = ethers.utils.parseEther(amount);
+    console.log(`📤 Depositing ${amount} POL to user account...`);
+    
+    const tx = await contract.depositCredits(userAddress, {
+      value: depositAmount,
+      gasLimit: 200000
+    });
+    
+    console.log(`📋 Transaction submitted: ${tx.hash}`);
+    const receipt = await tx.wait(2);
+    
+    if (receipt.status === 1) {
+      // Check new balance
+      const newCredits = await contract.getCreditBalance(userAddress);
+      const creditsAdded = newCredits.sub(currentCredits);
+      
+      console.log(`✅ Credits deposited successfully!`);
+      console.log(`   Transaction: ${tx.hash}`);
+      console.log(`   Block: ${receipt.blockNumber}`);
+      console.log(`   Credits added: ${creditsAdded.toString()}`);
+      console.log(`   New balance: ${newCredits.toString()} credits`);
+      
+      sendResponse(res, {
+        success: true,
+        transactionHash: tx.hash,
+        blockNumber: receipt.blockNumber,
+        userAddress,
+        polDeposited: amount,
+        creditsAdded: creditsAdded.toString(),
+        newCreditBalance: newCredits.toString(),
+        previousBalance: currentCredits.toString()
+      });
+    } else {
+      throw new Error('Credit deposit transaction failed');
+    }
+
+  } catch (error) {
+    console.error('❌ Credit deposit error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to deposit credits';
+    sendError(res, errorMessage, 500);
+  }
+});
+
 import express from 'express';
 import { Request, Response } from 'express';
 import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
