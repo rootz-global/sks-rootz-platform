@@ -212,25 +212,37 @@
             try {
                 showStatus('Loading your authorization requests...', 'info');
                 
-                // Call Enhanced Authorization Service API to get user's pending requests
+                // FIXED: Use correct AuthorizationController endpoint
                 const response = await fetch(`${API_BASE}/authorization/user-requests/${userAddress}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success && data.data && data.data.requests && data.data.requests.length > 0) {
                     displayAuthorizationRequests(data.data.requests);
                     clearStatus();
-                } else {
+                } else if (data.success && data.data) {
+                    // Handle case where requests array is empty but call was successful
                     document.getElementById('requestsList').innerHTML = `
                         <p>No pending authorization requests found.</p>
                         <p>Send an email to <strong>process@rivetz.com</strong> with your wallet address <code>${userAddress}</code> to create an authorization request.</p>
                         <p><small>Example: "Please create a DATA_WALLET for my address: ${userAddress}"</small></p>
                     `;
                     clearStatus();
+                } else {
+                    throw new Error(data.error || 'Unexpected API response format');
                 }
             } catch (error) {
                 console.error('Failed to load requests:', error);
                 showStatus('Failed to load authorization requests: ' + error.message, 'error');
-                document.getElementById('requestsList').innerHTML = '<p>Error loading requests. Please refresh and try again.</p>';
+                document.getElementById('requestsList').innerHTML = `
+                    <p>Error loading requests: ${error.message}</p>
+                    <p>Please refresh and try again.</p>
+                    <button onclick="loadAuthorizationRequests()" class="button button-primary">Retry</button>
+                `;
             }
         }
 
@@ -259,7 +271,7 @@
                     <div style="margin-top: 20px;">
                         ${request.status === 'pending' ? `
                             <button onclick="authorizeRequest('${request.requestId}')" class="button button-primary">
-                                Authorize with Enhanced Service
+                                Authorize EMAIL_DATA_WALLET Creation
                             </button>
                             <button onclick="rejectRequest('${request.requestId}')" class="button button-danger">
                                 Reject
@@ -286,17 +298,14 @@
                 const statusDiv = document.getElementById(`request-status-${requestId}`);
                 statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Creating authorization signature...</div>';
 
-                // Create message hash for signing (consistent with Enhanced Authorization Service)
-                const messageHash = ethers.utils.keccak256(
-                    ethers.utils.solidityPack(['bytes32'], [requestId])
-                );
+                console.log('Creating signature for request:', requestId);
 
-                // Sign message with MetaMask
-                const signature = await signer.signMessage(ethers.utils.arrayify(messageHash));
+                // FIXED: Use correct signature format (sign the requestId directly as bytes32)
+                const signature = await signer.signMessage(ethers.utils.arrayify(requestId));
                 
                 statusDiv.innerHTML = '<div class="status status-info"><span class="loading"></span> Submitting to Enhanced Authorization Service...</div>';
 
-                // Send signature to Enhanced Authorization Service API
+                // FIXED: Send to correct AuthorizationController endpoint
                 const response = await fetch(`${API_BASE}/authorization/authorize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -307,11 +316,16 @@
                     })
                 });
 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
                 const result = await response.json();
 
                 if (result.success) {
                     const walletId = result.data?.emailWalletId || result.emailWalletId;
-                    const txHash = result.data?.authorizationTx || result.authorizationTx;
+                    const txHash = result.data?.transactionHash || result.transactionHash;
                     
                     statusDiv.innerHTML = `
                         <div class="status status-success">
@@ -325,7 +339,7 @@
                     // Reload requests after successful authorization
                     setTimeout(loadAuthorizationRequests, 3000);
                 } else {
-                    statusDiv.innerHTML = `<div class="status status-error">Authorization failed: ${result.error}</div>`;
+                    statusDiv.innerHTML = `<div class="status status-error">Authorization failed: ${result.error || 'Unknown error'}</div>`;
                 }
 
             } catch (error) {
@@ -342,11 +356,17 @@
             }
 
             try {
+                // FIXED: Use correct AuthorizationController endpoint
                 const response = await fetch(`${API_BASE}/authorization/cancel`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requestId })
                 });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
 
                 const result = await response.json();
 
@@ -354,7 +374,7 @@
                     showStatus('Request rejected successfully', 'success');
                     loadAuthorizationRequests();
                 } else {
-                    showStatus('Failed to reject request: ' + result.error, 'error');
+                    showStatus('Failed to reject request: ' + (result.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
                 console.error('Failed to reject request:', error);

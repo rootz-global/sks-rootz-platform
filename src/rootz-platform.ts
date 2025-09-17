@@ -8,6 +8,7 @@ import { EmailWalletController } from './controllers/EmailWalletController';
 import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 import testRoutes from './routes/testRoutes';
 import authorizationRoutes from './routes/authorizationRoutes';
+import authorizationAPIRoutes from './routes/authorizationAPIRoutes';
 import EmailMonitoringController from './controllers/EmailMonitoringController';
 import { DataWalletMintingService } from './services/DataWalletMintingService';
 import { BlockchainEventMonitor } from './services/BlockchainEventMonitor';
@@ -210,8 +211,8 @@ export class RootzPlatform {
     // AUTHORIZATION ROUTES (NEW) - User Authorization Flow
     console.log('🔐 Initializing Authorization routes...');
     try {
-      router.use('/authorization', authorizationRoutes);
-      console.log('✅ Authorization routes initialized');
+      router.use('/authorization', authorizationAPIRoutes);
+      console.log('✅ Authorization API routes initialized');
       console.log('   Available at: /.rootz/authorization/*');
     } catch (error) {
       console.error('❌ Failed to initialize Authorization routes:', error);
