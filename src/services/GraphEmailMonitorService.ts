@@ -3,6 +3,7 @@ import { ClientSecretCredential } from '@azure/identity';
 import { Config } from '../config/Config';
 import { BlockchainService } from './BlockchainService';
 import { ConfigService } from './ConfigService';
+import { ethers } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -401,12 +402,13 @@ export class GraphEmailMonitorService {
 
       // Use blockchain registration system to find wallet by email
       try {
-        const registration = await this.blockchainService.getRegistrationByEmail(senderEmail);
-        if (registration && registration.walletAddress) {
-          console.log(`✅ Found registered wallet for ${senderEmail}: ${registration.walletAddress}`);
-          return registration.walletAddress;
+        // Call the contract method directly through the blockchain service
+        const walletAddress = await (this.blockchainService as any).registrationContract.getWalletFromEmail(senderEmail);
+        if (walletAddress && walletAddress !== ethers.constants.AddressZero) {
+          console.log(`✅ Found registered wallet for ${senderEmail}: ${walletAddress}`);
+          return walletAddress;
         }
-      } catch (blockchainError) {
+      } catch (blockchainError: any) {
         console.log(`⚠️ Blockchain lookup failed for ${senderEmail}:`, blockchainError.message);
       }
 
