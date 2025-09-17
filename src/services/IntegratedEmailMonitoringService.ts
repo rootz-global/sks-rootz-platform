@@ -1,6 +1,7 @@
 import { Config } from '../core/configuration';
 import EmailProcessingController from '../controllers/EmailProcessingController';
 import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
+import { RegistrationLookupService } from './RegistrationLookupService';
 
 /**
  * Integrated Email Monitoring Service
@@ -13,13 +14,16 @@ export class IntegratedEmailMonitoringService {
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastProcessedTime: Date = new Date();
   private graphClient: any = null;
+  private registrationLookupService: RegistrationLookupService;
 
   constructor(config: Config, sharedAuthService?: EnhancedAuthorizationService) {
     this.config = config;
     this.emailController = new EmailProcessingController(config, sharedAuthService);
+    this.registrationLookupService = new RegistrationLookupService();
     
     this.initializeGraphClient();
     console.log('🔧 Integrated Email Monitoring Service initialized');
+    console.log('✅ Integrated service using FIXED RegistrationLookupService');
   }
 
   /**
@@ -224,23 +228,16 @@ export class IntegratedEmailMonitoringService {
 
       console.log(`🔍 Looking up wallet for sender: ${senderEmail}`);
 
-      // First check hardcoded mapping for testing
-      const knownSenders: { [key: string]: string } = {
-        'steven@sprague.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b',
-        'demo@techcorp.com': '0x107C5655ce50AB9744Fc36A4e9935E30d4923d0b'
-      };
-
-      const mappedAddress = knownSenders[senderEmail.toLowerCase()];
-      if (mappedAddress) {
-        console.log(`✅ Found mapped address for ${senderEmail}: ${mappedAddress}`);
-        return mappedAddress;
+      // FIXED: Use the working RegistrationLookupService instead of hardcoded mappings
+      const walletAddress = await this.registrationLookupService.getWalletByEmail(senderEmail);
+      
+      if (walletAddress) {
+        console.log(`✅ Found registered wallet for ${senderEmail}: ${walletAddress}`);
+        return walletAddress;
       }
-
-      // TODO: Later integrate with blockchain registration system
-      // to look up email → wallet mapping from registration records
       
       console.log(`⚠️ No wallet address found for sender: ${senderEmail}`);
-      console.log(`💡 Supported senders: ${Object.keys(knownSenders).join(', ')}`);
+      console.log(`💡 User must register at: http://rootz.global/register-test.html`);
       return null;
 
     } catch (error) {
