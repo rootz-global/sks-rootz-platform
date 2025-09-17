@@ -78,13 +78,20 @@ router.post('/deposit-credits/:userAddress', async (req: Request, res: Response)
     const currentCredits = await contract.getCreditBalance(userAddress);
     console.log(`📋 Current credits: ${currentCredits.toString()}`);
     
-    // Deposit credits
+    // Deposit credits with proper gas pricing
     const depositAmount = ethers.utils.parseEther(amount);
     console.log(`📤 Depositing ${amount} POL to user account...`);
     
+    // Get current gas price and add buffer for network congestion
+    const gasPrice = await provider.getGasPrice();
+    const bufferedGasPrice = gasPrice.mul(150).div(100); // Add 50% buffer
+    
+    console.log(`⛽ Using gas price: ${ethers.utils.formatUnits(bufferedGasPrice, 'gwei')} gwei`);
+    
     const tx = await contract.depositCredits(userAddress, {
       value: depositAmount,
-      gasLimit: 200000
+      gasLimit: 200000,
+      gasPrice: bufferedGasPrice
     });
     
     console.log(`📋 Transaction submitted: ${tx.hash}`);
