@@ -52,39 +52,133 @@ router.get('/wallets/:userAddress', async (req: Request, res: Response) => {
 
     console.log(`📊 Getting created wallets for user: ${userAddress}`);
     
-    // For Phase 1: Return mock data that matches the dashboard expectations
-    // TODO Phase 2: Implement real blockchain wallet queries
-    const mockWallets = [
-      {
-        walletId: "0x1234567890abcdef1234567890abcdef12345678901234567890abcdef123456",
-        emailSubject: "Important Document - Q3 Report",
-        emailSender: "steven@rivetz.com",
-        createdAt: "2025-09-15T10:30:00Z",
-        creditsUsed: 4,
-        blockNumber: 26155199,
-        transactionHash: "0xd0d2b35c630052789e826242e77ab847fdb0174c0d30cc8b716e3da0d3621107",
-        ipfsHash: "QmZ2KpVtemRSmQKcRJBe8vHZBx1jMMzspFWYyprZno8bVW"
-      }
+    const authService = getSharedAuthService(req);
+    const healthCheck = await authService.healthCheck();
+    
+    if (!healthCheck.healthy) {
+      console.error('❌ Blockchain service not available');
+      return sendError(res, 'Blockchain service unavailable', 503);
+    }
+
+    // Get the EmailDataWalletOS_Secure contract from the auth service
+    const { ethers } = require('ethers');
+    const config = req.app.locals.config;
+    
+    // Initialize blockchain connection
+    const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
+    const privateKey = config.get('blockchain.serviceWalletPrivateKey');
+    const unifiedContractAddress = config.get('blockchain.unifiedContract', '0x0eb8830FaC353A63E912861137b246CAC7FC5977');
+    
+    if (!privateKey || !unifiedContractAddress) {
+      return sendError(res, 'Blockchain configuration missing', 500);
+    }
+    
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const serviceWallet = new ethers.Wallet(privateKey, provider);
+    
+    // EmailDataWalletOS_Secure ABI - focused on wallet query functions
+    const contractABI = [
+      "function getAllUserWallets(address userAddress) view returns (uint256[] memory)",
+      "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))",
+      "function getActiveWalletCount(address userAddress) view returns (uint256)"
     ];
-
-    const totalCreditsUsed = mockWallets.reduce((sum, wallet) => sum + wallet.creditsUsed, 0);
-
-    console.log(`✅ Found ${mockWallets.length} wallet(s) for user`);
+    
+    const contract = new ethers.Contract(unifiedContractAddress, contractABI, serviceWallet);
+    
+    // Get all wallet IDs for this user
+    console.log(`🔍 Querying contract ${unifiedContractAddress} for user wallets...`);
+    const walletIds = await contract.getAllUserWallets(userAddress);
+    console.log(`📋 Found ${walletIds.length} wallet IDs for user`);
+    
+    if (walletIds.length === 0) {
+      // No wallets found - return empty result
+      return sendResponse(res, {
+        userAddress,
+        wallets: [],
+        totalWallets: 0,
+        totalCreditsUsed: 0,
+        lastActivity: null
+      });
+    }
+    
+    // Get detailed information for each wallet
+    const walletDetails = [];
+    let totalCreditsUsed = 0;
+    
+    for (const walletId of walletIds) {
+      try {
+        console.log(`📄 Getting details for wallet ID: ${walletId.toString()}`);
+        const walletData = await contract.getEmailDataWallet(walletId);
+        
+        // Parse the returned tuple structure
+        const wallet = {
+          walletId: walletData.walletId.toString(),
+          userAddress: walletData.userAddress,
+          emailHash: walletData.emailHash,
+          subjectHash: walletData.subjectHash,
+          contentHash: walletData.contentHash,
+          senderHash: walletData.senderHash,
+          attachmentHashes: walletData.attachmentHashes,
+          attachmentCount: walletData.attachmentCount,
+          timestamp: walletData.timestamp.toString(),
+          isActive: walletData.isActive,
+          metadata: walletData.metadata,
+          // Derived fields for dashboard display
+          emailSubject: walletData.subjectHash || 'Email DATA_WALLET',
+          emailSender: walletData.senderHash || 'Unknown Sender',
+          createdAt: new Date(walletData.timestamp.toNumber() * 1000).toISOString(),
+          creditsUsed: 3 + (walletData.attachmentCount * 2) + 1, // Base + attachments + processing
+          blockNumber: 'Unknown', // TODO: Extract from creation transaction
+          transactionHash: 'Unknown', // TODO: Extract from creation transaction
+          ipfsHash: extractIpfsHashFromMetadata(walletData.metadata)
+        };
+        
+        totalCreditsUsed += wallet.creditsUsed;
+        walletDetails.push(wallet);
+        
+      } catch (walletError) {
+        console.error(`❌ Error getting wallet ${walletId.toString()}:`, walletError);
+        // Continue with other wallets, don't fail entire request
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    walletDetails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    console.log(`✅ Successfully retrieved ${walletDetails.length} wallets with ${totalCreditsUsed} total credits used`);
     
     sendResponse(res, {
       userAddress,
-      wallets: mockWallets,
-      totalWallets: mockWallets.length,
+      wallets: walletDetails,
+      totalWallets: walletDetails.length,
       totalCreditsUsed,
-      lastActivity: mockWallets.length > 0 ? mockWallets[mockWallets.length - 1].createdAt : null
+      lastActivity: walletDetails.length > 0 ? walletDetails[0].createdAt : null
     });
 
   } catch (error) {
     console.error('❌ Get user wallets error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to retrieve user wallets';
+    
+    // If it's a contract call failure, provide helpful error message
+    if (errorMessage.includes('call revert')) {
+      return sendError(res, 'Contract call failed - check contract address and user address', 500);
+    }
+    
     sendError(res, errorMessage, 500);
   }
 });
+
+/**
+ * Extract IPFS hash from metadata JSON string
+ */
+function extractIpfsHashFromMetadata(metadata: string): string {
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed.ipfsHash || 'Unknown';
+  } catch (error) {
+    return 'Unknown';
+  }
+}
 
 // GET /email-wallet/wallet/:walletId
 router.get('/wallet/:walletId', async (req: Request, res: Response) => {
