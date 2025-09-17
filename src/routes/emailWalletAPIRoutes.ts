@@ -1,3 +1,47 @@
+import express from 'express';
+import { Request, Response } from 'express';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
+
+/**
+ * Email Wallet API Routes - User Wallet Management
+ * 
+ * Provides endpoints for retrieving user's created email wallets
+ * and wallet-related statistics.
+ */
+
+const router = express.Router();
+
+/**
+ * Get shared Enhanced Authorization Service from app.locals
+ */
+function getSharedAuthService(req: Request): EnhancedAuthorizationService {
+  if (req.app.locals.sharedAuthService) {
+    return req.app.locals.sharedAuthService;
+  }
+  
+  throw new Error('Shared Authorization Service not available - platform not properly initialized');
+}
+
+/**
+ * Send API response
+ */
+function sendResponse(res: Response, data: any, statusCode: number = 200): void {
+  res.status(statusCode).json({
+    success: true,
+    data
+  });
+}
+
+/**
+ * Send API error response
+ */
+function sendError(res: Response, message: string, statusCode: number = 500): void {
+  res.status(statusCode).json({
+    success: false,
+    error: message
+  });
+}
+
 // POST /email-wallet/deposit-credits/:userAddress
 router.post('/deposit-credits/:userAddress', async (req: Request, res: Response) => {
   try {
@@ -77,50 +121,6 @@ router.post('/deposit-credits/:userAddress', async (req: Request, res: Response)
     sendError(res, errorMessage, 500);
   }
 });
-
-import express from 'express';
-import { Request, Response } from 'express';
-import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
-
-/**
- * Email Wallet API Routes - User Wallet Management
- * 
- * Provides endpoints for retrieving user's created email wallets
- * and wallet-related statistics.
- */
-
-const router = express.Router();
-
-/**
- * Get shared Enhanced Authorization Service from app.locals
- */
-function getSharedAuthService(req: Request): EnhancedAuthorizationService {
-  if (req.app.locals.sharedAuthService) {
-    return req.app.locals.sharedAuthService;
-  }
-  
-  throw new Error('Shared Authorization Service not available - platform not properly initialized');
-}
-
-/**
- * Send API response
- */
-function sendResponse(res: Response, data: any, statusCode: number = 200): void {
-  res.status(statusCode).json({
-    success: true,
-    data
-  });
-}
-
-/**
- * Send API error response
- */
-function sendError(res: Response, message: string, statusCode: number = 500): void {
-  res.status(statusCode).json({
-    success: false,
-    error: message
-  });
-}
 
 // GET /email-wallet/wallets/:userAddress
 router.get('/wallets/:userAddress', async (req: Request, res: Response) => {
