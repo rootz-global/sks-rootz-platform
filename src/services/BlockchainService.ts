@@ -151,7 +151,7 @@ export class BlockchainService {
             }
 
             // Register user with initial credit deposit
-            const creditDeposit = ethers.utils.parseEther('0.006'); // 60 credits worth
+            const creditDeposit = ethers.utils.parseEther('0.01'); // Match contract registration fee requirement
             
             const tx = await this.registrationContract.registerEmailWallet(
                 email,
