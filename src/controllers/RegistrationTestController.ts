@@ -1,12 +1,110 @@
 // src/controllers/RegistrationTestController.ts
 import { Request, Response } from 'express';
 import { RegistrationLookupService } from '../services/RegistrationLookupService';
+import { ConfigService } from '../services/ConfigService';
+import { ethers } from 'ethers';
 
 export class RegistrationTestController {
     private registrationService: RegistrationLookupService;
+    private configService: ConfigService;
+    private provider: ethers.providers.JsonRpcProvider;
+    private serviceWallet: ethers.Wallet;
 
     constructor() {
         this.registrationService = new RegistrationLookupService();
+        this.configService = new ConfigService('localhost');
+        
+        // Initialize blockchain connection for credit operations
+        const rpcUrl = this.configService.get('blockchain.rpcUrl') || 'https://rpc-amoy.polygon.technology/';
+        this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+        
+        const serviceWalletPrivateKey = this.configService.get('blockchain.serviceWalletPrivateKey');
+        if (!serviceWalletPrivateKey) {
+            console.error('❌ Service wallet private key not found in configuration');
+            throw new Error('Service wallet private key required for credit operations');
+        }
+        
+        this.serviceWallet = new ethers.Wallet(serviceWalletPrivateKey, this.provider);
+        console.log(`💳 Credit service initialized with wallet: ${this.serviceWallet.address}`);
+    }
+
+    /**
+     * Test endpoint: Grant credits to a wallet
+     * POST /.rootz/test/grant-credits
+     * Body: {"address": "0x30e1eA3dfDA0dD9694685B72Cde17E31c0f43e77", "amount": 60}
+     */
+    async grantCredits(req: Request, res: Response): Promise<void> {
+        try {
+            const { address, amount } = req.body;
+
+            if (!address || typeof address !== 'string') {
+                res.status(400).json({
+                    success: false,
+                    error: 'Address parameter required',
+                    timestamp: new Date().toISOString()
+                });
+                return;
+            }
+
+            const creditAmount = amount || 60; // Default 60 credits
+
+            console.log(`[CREDIT] Granting ${creditAmount} credits to: ${address}`);
+
+            // Get registration contract
+            const registrationContractAddress = this.configService.get('blockchain.contractRegistration');
+            const registrationAbi = [
+                "function depositCredits(address wallet) payable",
+                "function getCreditBalance(address wallet) view returns (uint256)"
+            ];
+
+            const registrationContract = new ethers.Contract(
+                registrationContractAddress,
+                registrationAbi,
+                this.serviceWallet
+            );
+
+            // Calculate POL amount (1 credit = 0.0001 POL)
+            const polAmount = ethers.utils.parseEther((creditAmount * 0.0001).toString());
+
+            console.log(`[CREDIT] Depositing ${ethers.utils.formatEther(polAmount)} POL for ${creditAmount} credits`);
+
+            // Call depositCredits with POL payment
+            const tx = await registrationContract.depositCredits(address, {
+                value: polAmount,
+                gasLimit: 200000
+            });
+
+            console.log(`[CREDIT] Transaction submitted: ${tx.hash}`);
+
+            // Wait for confirmation
+            const receipt = await tx.wait();
+
+            // Get updated credit balance
+            const newBalance = await registrationContract.getCreditBalance(address);
+
+            console.log(`[CREDIT] Transaction confirmed in block: ${receipt.blockNumber}`);
+            console.log(`[CREDIT] New credit balance: ${newBalance.toString()}`);
+
+            res.json({
+                success: true,
+                address: address,
+                creditsGranted: creditAmount,
+                polPaid: ethers.utils.formatEther(polAmount),
+                newBalance: newBalance.toString(),
+                transactionHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('[CREDIT] Error granting credits:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({
+                success: false,
+                error: errorMessage,
+                timestamp: new Date().toISOString()
+            });
+        }
     }
 
     /**

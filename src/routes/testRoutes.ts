@@ -15,5 +15,6 @@ router.post('/create-test-email', testController.createTestEmail.bind(testContro
 router.get('/registration-lookup', registrationTestController.lookupByEmail.bind(registrationTestController));
 router.get('/user-registration', registrationTestController.checkUserRegistration.bind(registrationTestController));
 router.get('/validate-mapping', registrationTestController.validateMapping.bind(registrationTestController));
+router.post('/grant-credits', registrationTestController.grantCredits.bind(registrationTestController));
 
 export default router;
