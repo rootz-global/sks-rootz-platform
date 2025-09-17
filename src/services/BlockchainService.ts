@@ -162,7 +162,7 @@ export class BlockchainService {
                 false, // auto process CC
                 {
                     value: creditDeposit,
-                    gasLimit: 300000,
+                    gasLimit: 600000,
                     gasPrice: await this.getOptimalGasPrice()
                 }
             );
@@ -237,7 +237,7 @@ export class BlockchainService {
                 [], // attachmentHashes
                 ipfsHash, // metadata
                 {
-                    gasLimit: 500000,
+                    gasLimit: 1000000,
                     gasPrice: await this.getOptimalGasPrice()
                 }
             );
