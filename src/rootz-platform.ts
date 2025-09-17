@@ -9,6 +9,7 @@ import { createEmailProcessingRoutes } from './routes/emailProcessingRoutes';
 import testRoutes from './routes/testRoutes';
 import authorizationRoutes from './routes/authorizationRoutes';
 import authorizationAPIRoutes from './routes/authorizationAPIRoutes';
+import emailWalletAPIRoutes from './routes/emailWalletAPIRoutes';
 import EmailMonitoringController from './controllers/EmailMonitoringController';
 import { DataWalletMintingService } from './services/DataWalletMintingService';
 import { BlockchainEventMonitor } from './services/BlockchainEventMonitor';
@@ -222,6 +223,16 @@ export class RootzPlatform {
       console.log('   Available at: /.rootz/authorization/*');
     } catch (error) {
       console.error('❌ Failed to initialize Authorization routes:', error);
+    }
+
+    // EMAIL WALLET API ROUTES (NEW) - User Wallet Management
+    console.log('📊 Initializing Email Wallet API routes...');
+    try {
+      router.use('/email-wallet', emailWalletAPIRoutes);
+      console.log('✅ Email Wallet API routes initialized');
+      console.log('   Available at: /.rootz/email-wallet/*');
+    } catch (error) {
+      console.error('❌ Failed to initialize Email Wallet API routes:', error);
     }
 
     // TEST ROUTES - DATA_WALLET Creation Testing
