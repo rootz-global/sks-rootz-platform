@@ -120,6 +120,12 @@ export class RootzPlatform {
     // Domain resolution middleware (EPISTERY pattern)
     app.use(this.domainResolutionMiddleware.bind(this));
     
+    // Make shared services available to routes
+    app.use((req, res, next) => {
+      req.app.locals.sharedAuthService = this.sharedAuthService;
+      next();
+    });
+    
     // Attach platform routes under /.rootz/ (well-known path) with CORS
     app.use('/.rootz', enableCORS, this.createRoutes());
     
