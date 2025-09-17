@@ -67,11 +67,14 @@ router.get('/wallets/:userAddress', async (req: Request, res: Response) => {
     // Initialize blockchain connection
     const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
     const privateKey = config.get('blockchain.serviceWalletPrivateKey');
-    const unifiedContractAddress = config.get('blockchain.unifiedContract', '0x0eb8830FaC353A63E912861137b246CAC7FC5977');
+    // Use the actual EmailDataWallet contract address from config
+    const emailDataWalletAddress = config.get('blockchain.contractEmailDataWallet', '0x18F3772F6f952d22D116Ce61323eC93f0E842F94');
     
-    if (!privateKey || !unifiedContractAddress) {
+    if (!privateKey || !emailDataWalletAddress) {
       return sendError(res, 'Blockchain configuration missing', 500);
     }
+    
+    console.log(`🎯 Using EmailDataWallet contract: ${emailDataWalletAddress}`);
     
     const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
     const serviceWallet = new ethers.Wallet(privateKey, provider);
@@ -83,10 +86,10 @@ router.get('/wallets/:userAddress', async (req: Request, res: Response) => {
       "function getActiveWalletCount(address userAddress) view returns (uint256)"
     ];
     
-    const contract = new ethers.Contract(unifiedContractAddress, contractABI, serviceWallet);
+    const contract = new ethers.Contract(emailDataWalletAddress, contractABI, serviceWallet);
     
     // Get all wallet IDs for this user
-    console.log(`🔍 Querying contract ${unifiedContractAddress} for user wallets...`);
+    console.log(`🔍 Querying contract ${emailDataWalletAddress} for user wallets...`);
     const walletIds = await contract.getAllUserWallets(userAddress);
     console.log(`📋 Found ${walletIds.length} wallet IDs for user`);
     
