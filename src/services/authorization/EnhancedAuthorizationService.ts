@@ -260,8 +260,8 @@ export class EnhancedAuthorizationService {
         throw new Error('Authorization request has expired');
       }
       
-      // Verify signature (user proving consent)
-      const expectedAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(requestId), signature);
+      // Verify signature (user proving consent) - FIXED to match frontend
+      const expectedAddress = ethers.utils.verifyMessage(requestId, signature);
       
       if (expectedAddress.toLowerCase() !== userAddress.toLowerCase()) {
         throw new Error('Invalid signature - signature does not match user address');
