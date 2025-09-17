@@ -14,15 +14,28 @@ import { Config } from '../core/configuration/Config';
 export class AuthorizationAPIController extends Controller {
   private authService: EnhancedAuthorizationService;
 
-  constructor(domain: string = 'localhost') {
+  constructor() {
     super();
     
-    // Use existing database-backed Enhanced Authorization Service
-    const config = new Config();
-    config.loadDomain(domain);
-    this.authService = new EnhancedAuthorizationService(config);
+    console.log('✅ AuthorizationAPIController using SHARED EnhancedAuthorizationService from platform');
+  }
+
+  /**
+   * Get shared Enhanced Authorization Service from platform
+   */
+  private getAuthService(): EnhancedAuthorizationService {
+    // Get from platform singleton if available
+    if (global.rootzPlatform?.getSharedAuthService) {
+      return global.rootzPlatform.getSharedAuthService();
+    }
     
-    console.log('✅ AuthorizationAPIController using DATABASE-BACKED EnhancedAuthorizationService');
+    // Fallback: create new instance (shouldn't happen in production)
+    console.warn('⚠️ Using fallback authorization service - should use shared instance');
+    const config = new Config();
+    config.loadDomain('localhost');
+    const service = new EnhancedAuthorizationService(config);
+    service.initialize().catch(err => console.error('Auth service init error:', err));
+    return service;
   }
 
   /**
@@ -40,7 +53,7 @@ export class AuthorizationAPIController extends Controller {
 
       console.log(`🔍 Getting authorization request: ${requestId}`);
 
-      const request = await this.authService.getAuthorizationRequest(requestId);
+      const request = await this.getAuthService().getAuthorizationRequest(requestId);
 
       if (!request) {
         console.log(`❌ Authorization request not found: ${requestId}`);
