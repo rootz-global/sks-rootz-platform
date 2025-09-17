@@ -1,75 +1,28 @@
 import { Request, Response } from 'express';
 import { Controller } from './Controller';
-import { AuthorizationRequestService, AuthorizationRequestData, AuthorizationRequestCreateData } from '../services/authorization/AuthorizationRequestService';
+import { EnhancedAuthorizationService } from '../services/authorization/EnhancedAuthorizationService';
+import { Config } from '../core/configuration/Config';
 
 /**
- * Authorization API Controller
+ * Authorization API Controller - DATABASE BACKED
  * 
- * Handles HTTP requests for email wallet authorization flow.
- * Clean, TypeScript-first implementation with proper error handling.
+ * Uses the existing EnhancedAuthorizationService with PostgreSQL database
+ * instead of creating a separate in-memory service.
  * 
- * Engineering Focus: 
- * - Single responsibility
- * - Proper TypeScript types
- * - Clean error responses
- * - Consistent API patterns
+ * This connects to the SAME database that email processing uses.
  */
 export class AuthorizationAPIController extends Controller {
-  private authService: AuthorizationRequestService;
+  private authService: EnhancedAuthorizationService;
 
-  constructor() {
+  constructor(domain: string = 'localhost') {
     super();
-    this.authService = new AuthorizationRequestService();
-    console.log('✅ AuthorizationAPIController initialized');
-  }
-
-  /**
-   * POST /authorization/create
-   * Create new authorization request for email wallet
-   * 
-   * Body: {
-   *   userAddress: string,
-   *   emailSubject: string,
-   *   emailSender: string,
-   *   emailHash: string,
-   *   attachmentCount?: number,
-   *   attachmentHashes?: string[],
-   *   ipfsHash?: string,
-   *   metadata?: any
-   * }
-   */
-  async createAuthorizationRequest(req: Request, res: Response): Promise<void> {
-    try {
-      const createData: AuthorizationRequestCreateData = {
-        userAddress: req.body.userAddress,
-        emailSubject: req.body.emailSubject,
-        emailSender: req.body.emailSender,
-        emailHash: req.body.emailHash,
-        attachmentCount: req.body.attachmentCount || 0,
-        attachmentHashes: req.body.attachmentHashes || [],
-        ipfsHash: req.body.ipfsHash,
-        metadata: req.body.metadata
-      };
-
-      console.log(`📝 Creating authorization request for ${createData.userAddress}`);
-      console.log(`   Subject: ${createData.emailSubject}`);
-      console.log(`   Sender: ${createData.emailSender}`);
-
-      const result = await this.authService.createAuthorizationRequest(createData);
-
-      if (result.success) {
-        console.log(`✅ Authorization request created: ${result.requestId}`);
-        this.sendResponse(res, result.data, 201);
-      } else {
-        console.error(`❌ Failed to create authorization request: ${result.error}`);
-        this.sendError(res, result.error || 'Failed to create authorization request', 400);
-      }
-
-    } catch (error) {
-      console.error('❌ Create authorization request error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-      this.sendError(res, errorMessage, 500);
-    }
+    
+    // Use existing database-backed Enhanced Authorization Service
+    const config = new Config();
+    config.loadDomain(domain);
+    this.authService = new EnhancedAuthorizationService(config);
+    
+    console.log('✅ AuthorizationAPIController using DATABASE-BACKED EnhancedAuthorizationService');
   }
 
   /**
@@ -96,7 +49,18 @@ export class AuthorizationAPIController extends Controller {
       }
 
       console.log(`✅ Authorization request found: ${request.status}`);
-      this.sendResponse(res, this.formatRequestForAPI(request));
+      this.sendResponse(res, {
+        requestId: request.requestId,
+        userAddress: request.userAddress,
+        emailSubject: request.emailSubject || 'Email Authorization Request',
+        emailSender: request.emailSender || 'Unknown sender',
+        attachmentCount: request.attachmentCount || 0,
+        creditCost: request.creditCost,
+        authToken: request.authToken,
+        status: request.status,
+        createdAt: request.createdAt.toISOString(),
+        expiresAt: request.expiresAt.toISOString()
+      });
 
     } catch (error) {
       console.error('❌ Get authorization request error:', error);
@@ -129,7 +93,18 @@ export class AuthorizationAPIController extends Controller {
       }
 
       console.log(`✅ Authorization request found by token: ${request.status}`);
-      this.sendResponse(res, this.formatRequestForAPI(request));
+      this.sendResponse(res, {
+        requestId: request.requestId,
+        userAddress: request.userAddress,
+        emailSubject: request.emailSubject || 'Email Authorization Request',
+        emailSender: request.emailSender || 'Unknown sender',
+        attachmentCount: request.attachmentCount || 0,
+        creditCost: request.creditCost,
+        authToken: request.authToken,
+        status: request.status,
+        createdAt: request.createdAt.toISOString(),
+        expiresAt: request.expiresAt.toISOString()
+      });
 
     } catch (error) {
       console.error('❌ Get authorization request by token error:', error);
@@ -153,14 +128,44 @@ export class AuthorizationAPIController extends Controller {
 
       console.log(`👤 Getting pending requests for user: ${userAddress}`);
 
-      const requests = await this.authService.getPendingRequestsForUser(userAddress);
+      // Use Enhanced Authorization Service database queries
+      const requestIds = await this.authService.getUserRequests(userAddress);
+      
+      // Get full request details for each ID
+      const requests = await Promise.all(
+        requestIds.map(async (id: string) => {
+          try {
+            return await this.authService.getAuthorizationRequest(id);
+          } catch (error) {
+            console.warn(`Failed to get request details for ${id}:`, error);
+            return null;
+          }
+        })
+      );
 
-      console.log(`✅ Found ${requests.length} pending requests for user`);
+      // Filter to only pending requests
+      const pendingRequests = requests
+        .filter((req): req is NonNullable<typeof req> => req !== null)
+        .filter(req => req.status === 'pending' && new Date(req.expiresAt) > new Date())
+        .map(req => ({
+          requestId: req.requestId,
+          userAddress: req.userAddress,
+          emailSubject: req.emailSubject || 'Email Authorization Request',
+          emailSender: req.emailSender || 'Unknown sender',
+          attachmentCount: req.attachmentCount || 0,
+          creditCost: req.creditCost,
+          authToken: req.authToken,
+          status: req.status,
+          createdAt: req.createdAt.toISOString(),
+          expiresAt: req.expiresAt.toISOString()
+        }));
+
+      console.log(`✅ Found ${pendingRequests.length} pending requests for user`);
       
       this.sendResponse(res, {
         userAddress,
-        pendingRequests: requests.map(req => this.formatRequestForAPI(req)),
-        totalCount: requests.length
+        pendingRequests,
+        totalCount: pendingRequests.length
       });
 
     } catch (error) {
@@ -193,21 +198,20 @@ export class AuthorizationAPIController extends Controller {
       console.log(`   User: ${userAddress}`);
       console.log(`   Signature: ${signature.substring(0, 20)}...`);
 
-      const result = await this.authService.authorizeRequest(requestId, userAddress, signature);
+      // Use Enhanced Authorization Service to authorize and create wallet
+      const result = await this.authService.authorizeEmailWalletCreation(requestId, userAddress, signature);
 
       if (result.success) {
-        console.log(`✅ Request authorized successfully: ${requestId}`);
-        
-        // TODO: Integrate with blockchain service to create actual email wallet
-        // For now, just mark as authorized
+        console.log(`✅ Request authorized and wallet created: ${requestId}`);
         
         this.sendResponse(res, {
           success: true,
-          message: 'Authorization request approved',
-          ...result.data,
-          // TODO: Add actual wallet creation result
-          emailWalletId: null,
-          transactionHash: null
+          message: 'Email wallet created successfully',
+          requestId: result.requestId,
+          userAddress: userAddress,
+          status: 'processed',
+          emailWalletId: result.emailWalletId,
+          transactionHash: result.authorizationTx
         });
       } else {
         console.error(`❌ Failed to authorize request: ${result.error}`);
@@ -240,14 +244,15 @@ export class AuthorizationAPIController extends Controller {
 
       console.log(`🚫 Cancelling authorization request: ${requestId}`);
 
-      const result = await this.authService.rejectRequest(requestId);
+      const result = await this.authService.cancelRequest(requestId);
 
       if (result.success) {
         console.log(`✅ Request cancelled successfully: ${requestId}`);
         this.sendResponse(res, {
           success: true,
           message: 'Authorization request cancelled',
-          ...result.data
+          requestId: result.requestId,
+          status: 'cancelled'
         });
       } else {
         console.error(`❌ Failed to cancel request: ${result.error}`);
@@ -262,85 +267,22 @@ export class AuthorizationAPIController extends Controller {
   }
 
   /**
-   * POST /authorization/process
-   * Mark request as processed (wallet created)
-   * Internal endpoint for email processing service
-   * 
-   * Body: {
-   *   requestId: string,
-   *   walletId?: string,
-   *   transactionHash?: string
-   * }
-   */
-  async markRequestProcessed(req: Request, res: Response): Promise<void> {
-    try {
-      const { requestId, walletId, transactionHash } = req.body;
-
-      if (!requestId) {
-        this.sendError(res, 'Request ID is required', 400);
-        return;
-      }
-
-      console.log(`✅ Marking request as processed: ${requestId}`);
-      if (walletId) console.log(`   Wallet ID: ${walletId}`);
-      if (transactionHash) console.log(`   Transaction: ${transactionHash}`);
-
-      const result = await this.authService.markRequestProcessed(requestId, walletId, transactionHash);
-
-      if (result.success) {
-        console.log(`✅ Request marked as processed: ${requestId}`);
-        this.sendResponse(res, {
-          success: true,
-          message: 'Request marked as processed',
-          ...result.data
-        });
-      } else {
-        console.error(`❌ Failed to mark request as processed: ${result.error}`);
-        this.sendError(res, result.error || 'Failed to mark request as processed', 400);
-      }
-
-    } catch (error) {
-      console.error('❌ Mark request processed error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-      this.sendError(res, errorMessage, 500);
-    }
-  }
-
-  /**
    * GET /authorization/health
    * Get authorization service health status
    */
   async getHealthStatus(req: Request, res: Response): Promise<void> {
     try {
-      const health = await this.authService.getHealthStatus();
+      const health = await this.authService.healthCheck();
       
-      this.sendResponse(res, health);
+      this.sendResponse(res, {
+        service: 'EnhancedAuthorizationService (Database)',
+        ...health
+      });
       
     } catch (error) {
       console.error('❌ Authorization health check error:', error);
       this.sendError(res, 'Health check failed', 500);
     }
-  }
-
-  /**
-   * Format authorization request for API response
-   * Removes internal fields and formats dates
-   */
-  private formatRequestForAPI(request: AuthorizationRequestData): any {
-    return {
-      requestId: request.requestId,
-      userAddress: request.userAddress,
-      emailSubject: request.emailSubject,
-      emailSender: request.emailSender,
-      attachmentCount: request.attachmentCount,
-      creditCost: request.creditCost,
-      authToken: request.authToken,
-      status: request.status,
-      createdAt: request.createdAt.toISOString(),
-      expiresAt: request.expiresAt.toISOString(),
-      // Include metadata if present
-      ...(request.metadata && { metadata: request.metadata })
-    };
   }
 }
 
