@@ -183,52 +183,162 @@ function extractIpfsHashFromMetadata(metadata: string): string {
   }
 }
 
-// GET /email-wallet/wallet/:walletId
-router.get('/wallet/:walletId', async (req: Request, res: Response) => {
+// GET /email-wallet/wallet/:walletId/email-data
+router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) => {
   try {
     const { walletId } = req.params;
     if (!walletId) {
       return sendError(res, 'Wallet ID is required', 400);
     }
 
-    console.log(`🔍 Getting wallet details for: ${walletId}`);
+    console.log(`📧 Getting email data for wallet: ${walletId}`);
     
-    // For Phase 1: Return mock data for wallet details
-    // TODO Phase 2: Implement real blockchain wallet query
-    const mockWalletDetail = {
-      walletId,
-      userAddress: "0x30e1eA3dfDA0dD9694685B72Cde17E31c0f43e77",
-      emailSubject: "Important Document - Q3 Report",
-      emailSender: "steven@rivetz.com",
-      emailRecipient: "process@rivetz.com",
-      createdAt: "2025-09-15T10:30:00Z",
-      creditsUsed: 4,
-      blockNumber: 26155199,
-      transactionHash: "0xd0d2b35c630052789e826242e77ab847fdb0174c0d30cc8b716e3da0d3621107",
-      ipfsHash: "QmZ2KpVtemRSmQKcRJBe8vHZBx1jMMzspFWYyprZno8bVW",
-      ipfsUrl: "https://gateway.pinata.cloud/ipfs/QmZ2KpVtemRSmQKcRJBe8vHZBx1jMMzspFWYyprZno8bVW",
-      attachments: [],
-      metadata: {
-        emailAuthentication: {
-          spfPass: true,
-          dkimValid: true,
-          dmarcPass: true
-        },
-        processed: true,
-        verified: true
+    const authService = getSharedAuthService(req);
+    const config = req.app.locals.config;
+    const { ethers } = require('ethers');
+    
+    // Initialize blockchain connection
+    const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
+    const privateKey = config.get('blockchain.serviceWalletPrivateKey');
+    const emailDataWalletAddress = config.get('blockchain.contractEmailDataWallet', '0x18F3772F6f952d22D116Ce61323eC93f0E842F94');
+    
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const serviceWallet = new ethers.Wallet(privateKey, provider);
+    
+    // EmailDataWallet ABI for getting wallet details
+    const contractABI = [
+      "function getEmailDataWallet(uint256 walletId) view returns (tuple(uint256 walletId, address userAddress, string emailHash, string subjectHash, string contentHash, string senderHash, string[] attachmentHashes, uint32 attachmentCount, uint256 timestamp, bool isActive, string metadata))"
+    ];
+    
+    const contract = new ethers.Contract(emailDataWalletAddress, contractABI, serviceWallet);
+    
+    // Get wallet data from blockchain
+    console.log(`🔍 Querying contract for wallet ${walletId} details...`);
+    const walletData = await contract.getEmailDataWallet(walletId);
+    
+    // Extract IPFS hash from metadata
+    let ipfsHash = 'Unknown';
+    let rawEmailContent = null;
+    let parsedEmailData = null;
+    
+    try {
+      const metadata = JSON.parse(walletData.metadata);
+      ipfsHash = metadata.ipfsHash;
+      
+      if (ipfsHash && ipfsHash !== 'Unknown' && ipfsHash !== 'no-ipfs') {
+        console.log(`📦 Fetching email content from IPFS: ${ipfsHash}`);
+        
+        // Fetch from IPFS via Pinata gateway
+        const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+        const fetch = require('node-fetch');
+        
+        const ipfsResponse = await fetch(ipfsUrl);
+        if (ipfsResponse.ok) {
+          rawEmailContent = await ipfsResponse.text();
+          console.log(`✅ Retrieved ${rawEmailContent.length} characters from IPFS`);
+          
+          // Parse email content (basic parsing)
+          parsedEmailData = parseEmailContent(rawEmailContent);
+        } else {
+          console.warn(`⚠️ IPFS fetch failed: ${ipfsResponse.status}`);
+        }
+      }
+    } catch (metadataError) {
+      console.warn(`⚠️ Error parsing metadata or fetching IPFS:`, metadataError);
+    }
+    
+    // Construct comprehensive email data response
+    const emailData = {
+      walletId: walletData.walletId.toString(),
+      userAddress: walletData.userAddress,
+      blockchainData: {
+        emailHash: walletData.emailHash,
+        subjectHash: walletData.subjectHash,
+        contentHash: walletData.contentHash,
+        senderHash: walletData.senderHash,
+        attachmentHashes: walletData.attachmentHashes,
+        attachmentCount: walletData.attachmentCount,
+        timestamp: walletData.timestamp.toString(),
+        isActive: walletData.isActive,
+        metadata: walletData.metadata
+      },
+      ipfsData: {
+        ipfsHash,
+        ipfsUrl: ipfsHash !== 'Unknown' ? `https://gateway.pinata.cloud/ipfs/${ipfsHash}` : null,
+        rawContent: rawEmailContent,
+        contentLength: rawEmailContent ? rawEmailContent.length : 0
+      },
+      parsedEmail: parsedEmailData,
+      createdAt: new Date(walletData.timestamp.toNumber() * 1000).toISOString(),
+      displayData: {
+        subject: parsedEmailData?.subject || walletData.subjectHash || 'Unknown Subject',
+        from: parsedEmailData?.from || walletData.senderHash || 'Unknown Sender',
+        to: parsedEmailData?.to || 'process@rivetz.com',
+        date: parsedEmailData?.date || new Date(walletData.timestamp.toNumber() * 1000).toLocaleString(),
+        hasAttachments: walletData.attachmentCount > 0,
+        attachmentCount: walletData.attachmentCount
       }
     };
-
-    console.log(`✅ Wallet details retrieved for: ${walletId.substring(0, 8)}...`);
     
-    sendResponse(res, mockWalletDetail);
+    console.log(`✅ Email data compiled for wallet ${walletId}`);
+    
+    sendResponse(res, emailData);
 
   } catch (error) {
-    console.error('❌ Get wallet details error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error(`❌ Get email data error:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to retrieve email data';
     sendError(res, errorMessage, 500);
   }
 });
+
+/**
+ * Basic email content parser
+ */
+function parseEmailContent(rawEmail: string): any {
+  try {
+    const lines = rawEmail.split('\n');
+    let subject = '';
+    let from = '';
+    let to = '';
+    let date = '';
+    let bodyStart = -1;
+    
+    // Parse headers
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (line.startsWith('Subject:')) {
+        subject = line.substring(8).trim();
+      } else if (line.startsWith('From:')) {
+        from = line.substring(5).trim();
+      } else if (line.startsWith('To:')) {
+        to = line.substring(3).trim();
+      } else if (line.startsWith('Date:')) {
+        date = line.substring(5).trim();
+      } else if (line.trim() === '' && bodyStart === -1) {
+        bodyStart = i + 1;
+        break;
+      }
+    }
+    
+    // Extract body
+    const body = bodyStart > -1 ? lines.slice(bodyStart).join('\n').trim() : '';
+    
+    return {
+      subject,
+      from,
+      to,
+      date,
+      body,
+      headers: lines.slice(0, bodyStart > -1 ? bodyStart - 1 : 10),
+      bodyLength: body.length
+    };
+    
+  } catch (error) {
+    console.error('Email parsing error:', error);
+    return null;
+  }
+}
 
 // GET /email-wallet/stats/:userAddress
 router.get('/stats/:userAddress', async (req: Request, res: Response) => {
