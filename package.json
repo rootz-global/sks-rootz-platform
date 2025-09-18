@@ -1,9 +1,22 @@
 {
-  "name": "sks-rootz-platform",
+  "name": "@rootz-global/sks-rootz-platform",
   "version": "1.0.0",
   "description": "SKS Rootz Platform - EPISTERY-style unified services platform with Email Processing, IPFS, and Blockchain Integration",
   "main": "dist/index.js",
   "type": "commonjs",
+  "bin": {
+    "rootz-platform": "./bin/rootz-platform.js",
+    "rootz": "./bin/rootz.js"
+  },
+  "files": [
+    "dist/**/*",
+    "bin/**/*",
+    "scripts/**/*",
+    "templates/**/*",
+    "docs/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/rootz-global/sks-rootz-platform.git"
@@ -22,7 +35,9 @@
     "typescript",
     "microsoft-graph",
     "polygon",
-    "ethereum"
+    "ethereum",
+    "installer",
+    "cli"
   ],
   "scripts": {
     "build": "tsc",
@@ -41,25 +56,33 @@
     "hardhat:node": "npx hardhat node",
     "contract:deploy": "npx hardhat run contracts/deployment/scripts/deploy-enhanced-email-wallet.js --network amoy",
     "contract:deploy:local": "npx hardhat run contracts/deployment/scripts/deploy-enhanced-email-wallet.js --network localhost",
-    "contract:verify": "npx hardhat verify --network amoy"
+    "contract:verify": "npx hardhat verify --network amoy",
+    "postinstall": "node scripts/post-install.js",
+    "preuninstall": "node scripts/pre-uninstall.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@azure/identity": "^4.0.1",
     "@azure/msal-node": "^2.6.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "bcryptjs": "2.4.3",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
     "cookie-parser": "1.4.7",
     "cors": "2.8.5",
     "dotenv": "16.3.1",
     "ethers": "5.7.2",
     "express": "4.18.2",
     "express-rate-limit": "6.8.0",
+    "fs-extra": "^11.1.1",
     "helmet": "7.0.0",
     "ini": "5.0.0",
+    "inquirer": "^9.2.12",
     "joi": "17.9.2",
     "jsonwebtoken": "9.0.2",
     "mailparser": "^3.6.5",
     "node-fetch": "^2.7.0",
+    "ora": "^7.0.1",
     "pg": "^8.11.0",
     "redis": "4.6.0",
     "winston": "3.10.0"

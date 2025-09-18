@@ -1,0 +1,1002 @@
+{\rtf1\ansi\deff0 {\fonttbl {\f0 Times New Roman;} {\f1 Courier New;}}
+{\colortbl;\red0\green0\blue0;\red0\green0\blue255;\red255\green0\blue0;}
+
+\f0\fs24
+
+{\b\fs28 Email Wallet System - Architecture Documentation}
+\par\par
+
+{\b Version:} 1.0\par
+{\b Date:} December 2024\par
+{\b Audience:} Architecture Team\par
+{\b System:} SKS Rootz Platform - Email Data Wallet Service\par\par
+
+{\b\fs26 Table of Contents}
+\par\par
+1. System Overview\par
+2. Component Architecture\par
+3. Blockchain Integration\par
+4. UML Interaction Diagrams\par
+5. Security Model\par
+6. Email Provenance Verification\par
+7. Data Flow Analysis\par
+8. Deployment Architecture\par
+9. Appendix A: UML Diagram Source Code\par\par
+
+\page
+
+{\b\fs26 1. System Overview}
+\par\par
+
+{\b\fs22 Purpose}
+\par
+The Email Wallet System transforms email communications into verifiable blockchain DATA_WALLETs, creating immutable provenance records using the "math of ORIGIN" - a comprehensive model that tracks data from source to user-owned digital asset.
+\par\par
+
+{\b\fs22 Core Value Proposition}
+\par
+{\b Immutable Email Records:} Every email becomes a blockchain-verified digital asset\par
+{\b Cryptographic Provenance:} Complete audit trail from email reception to wallet ownership\par
+{\b User Ownership:} Recipients control their data wallets with full blockchain verification\par
+{\b Anti-Tampering:} Email content integrity protected by cryptographic hashing\par
+{\b Compliance Ready:} Built-in audit trails for regulatory requirements\par\par
+
+{\b\fs22 High-Level Architecture}
+\par
+[UML DIAGRAM 1 PLACEHOLDER - System Overview]\par
+{\i Note: See Appendix A for UML source code}
+\par\par
+
+The system follows a clear flow from email source through service processing to blockchain verification and user ownership.\par\par
+
+\page
+
+{\b\fs26 2. Component Architecture}
+\par\par
+
+{\b\fs22 2.1 Email Processing Components}
+\par\par
+
+{\b Email Monitor Service}
+\par
+{\b Purpose:} Monitors incoming emails and triggers processing pipeline
+\par\par
+
+{\f1\fs20 EmailMonitorService
+├── GraphEmailMonitorService (Microsoft Graph API)
+│   ├── OAuth2 Authentication
+│   ├── Polling Mechanism (1-minute intervals)
+│   ├── Email Content Extraction
+│   └── Security Validation
+├── ImapEmailMonitorService (Alternative)
+│   ├── IMAP Connection Management
+│   ├── SSL/TLS Security
+│   └── Mailbox Polling
+└── Email Processing Pipeline
+    ├── Content Hash Generation
+    ├── Attachment Processing
+    ├── Metadata Extraction
+    └── IPFS Upload}
+\f0\fs24
+\par\par
+
+{\b Chain Data Relationship:}
+\par
+• Email hash stored in EmailDataWallet contract\par
+• IPFS hash recorded for distributed storage\par
+• Timestamp and sender verification on-chain\par
+• Attachment hashes linked to main email record\par\par
+
+{\b Content Processing Service}
+\par
+{\b Purpose:} Extracts, validates, and prepares email content for blockchain storage
+\par\par
+
+{\f1\fs20 ContentProcessingService
+├── EmailParser
+│   ├── Header Analysis
+│   ├── Body Content Extraction
+│   ├── Attachment Processing
+│   └── Metadata Collection
+├── HashingService
+│   ├── SHA-256 Content Hashing
+│   ├── Merkle Tree Construction
+│   ├── Attachment Hash Linking
+│   └── Integrity Verification
+└── IPFSService
+    ├── Content Upload
+    ├── Pin Management
+    ├── Retrieval Verification
+    └── Redundancy Handling}
+\f0\fs24
+\par\par
+
+{\b Chain Data Relationship:}
+\par
+• Content hash becomes immutable record in smart contract\par
+• IPFS hash enables distributed retrieval\par
+• Merkle tree structure proves attachment integrity\par
+• Metadata stored as structured blockchain events\par\par
+
+{\b\fs22 2.2 Blockchain Integration Components}
+\par\par
+
+{\b Blockchain Service}
+\par
+{\b Purpose:} Primary interface to Polygon blockchain and smart contracts
+\par\par
+
+{\f1\fs20 BlockchainService
+├── Contract Management
+│   ├── EmailWalletRegistration (0x71C1...)
+│   ├── EmailDataWallet (0x52e...)
+│   ├── AttachmentWallet (0x5e0...)
+│   └── AuthorizationManager (0xcC2...)
+├── Transaction Management
+│   ├── Gas Estimation
+│   ├── Transaction Signing
+│   ├── Error Handling
+│   └── Receipt Verification
+├── Service Wallet Management
+│   ├── Private Key Security
+│   ├── Balance Monitoring
+│   ├── Automated Operations
+│   └── Multi-Signature Support
+└── Event Monitoring
+    ├── Contract Event Listening
+    ├── State Change Detection
+    ├── User Notification Triggers
+    └── Error Recovery}
+\f0\fs24
+\par\par
+
+{\b Chain Data Relationship:}
+\par
+• Service wallet executes all blockchain operations\par
+• Contract state maintains user registrations and credits\par
+• Transaction hashes provide immutable operation proof\par
+• Event logs create searchable audit trail\par\par
+
+{\b Smart Contract Architecture}
+\par\par
+
+{\f1\fs20 Smart Contract Ecosystem
+├── EmailWalletRegistration
+│   ├── User Registration Management
+│   ├── Credit System
+│   ├── Email-to-Wallet Mapping
+│   └── Access Control
+├── EmailDataWallet  
+│   ├── Email Content Storage
+│   ├── Metadata Management
+│   ├── Ownership Transfer
+│   └── Retrieval Functions
+├── AttachmentWallet
+│   ├── Attachment Hash Storage
+│   ├── File Type Validation
+│   ├── Size Tracking
+│   └── Linked Email References
+└── AuthorizationManager
+    ├── User Intent Verification
+    ├── Signature Validation
+    ├── Automated Processing
+    └── State Coordination}
+\f0\fs24
+\par\par
+
+{\b\fs22 2.3 User Management Components}
+\par\par
+
+{\b Registration Service}
+\par
+{\b Purpose:} Manages user onboarding and wallet association
+\par\par
+
+{\f1\fs20 RegistrationService
+├── User Onboarding
+│   ├── Email Verification
+│   ├── Wallet Connection
+│   ├── Signature Validation
+│   └── Identity Binding
+├── Credit Management
+│   ├── Initial Credit Allocation
+│   ├── Usage Tracking
+│   ├── Billing Integration
+│   └── Refund Processing
+└── Access Control
+    ├── Permission Management
+    ├── Role Assignment
+    ├── Security Policies
+    └── Audit Logging}
+\f0\fs24
+\par\par
+
+{\b Chain Data Relationship:}
+\par
+• User wallet address becomes primary identity\par
+• Email addresses linked to wallet on-chain\par
+• Credit balance maintained in smart contract\par
+• Registration timestamp creates permanent record\par\par
+
+{\b\fs22 2.4 Security and Infrastructure Components}
+\par\par
+
+{\b Configuration Management (EPISTERY Pattern)}
+\par
+{\b Purpose:} Secure configuration and secret management
+\par\par
+
+{\f1\fs20 ConfigurationService
+├── Domain-Aware Configuration
+│   ├── ~/.data-wallet/domain/config.ini
+│   ├── Environment Separation
+│   ├── Secret Isolation
+│   └── Dynamic Loading
+├── Security Features
+│   ├── Private Key Protection
+│   ├── API Key Management
+│   ├── Certificate Storage
+│   └── Access Logging
+└── Service Integration
+    ├── Multi-Service Configuration
+    ├── Shared Resources
+    ├── Version Management
+    └── Rollback Capability}
+\f0\fs24
+\par\par
+
+\page
+
+{\b\fs26 3. Blockchain Integration}
+\par\par
+
+{\b\fs22 Contract Interaction Patterns}
+\par\par
+
+{\b Registration Flow}
+\par
+{\f1\fs20 User Registration Process:
+1. User signs message with wallet
+2. Service validates signature
+3. Service calls EmailWalletRegistration.registerEmailWallet()
+4. Contract creates user record with email mapping
+5. Initial credits deposited (60 credits = 0.006 POL)
+6. Registration event emitted for tracking}
+\f0\fs24
+\par\par
+
+{\b Email Processing Flow}
+\par
+{\f1\fs20 Email to Wallet Process:
+1. Email detected in monitored account
+2. Content extracted and hashed
+3. IPFS upload for distributed storage
+4. Service calls AuthorizationManager.createAuthorizationRequest()
+5. User receives notification to authorize
+6. User signs authorization via MetaMask
+7. Service calls authorizeEmailWalletCreation()
+8. Automated wallet creation and ownership transfer}
+\f0\fs24
+\par\par
+
+{\b\fs22 Data Storage Strategy}
+\par\par
+
+{\b On-Chain Data (Gas Optimized)}
+\par
+• User wallet addresses and email mappings\par
+• Content hashes (SHA-256)\par
+• IPFS hash references\par
+• Ownership records and transfers\par
+• Credit balances and transactions\par
+• Authorization signatures and timestamps\par\par
+
+{\b Off-Chain Data (IPFS)}
+\par
+• Full email content\par
+• Attachment files\par
+• Extended metadata\par
+• Search indexes\par
+• Backup copies\par\par
+
+\page
+
+{\b\fs26 4. UML Interaction Diagrams}
+\par\par
+
+{\b\fs22 4.1 System-Level Interaction Diagram}
+\par
+[UML DIAGRAM 2 PLACEHOLDER - System Level Interaction]\par
+{\i Note: See Appendix A for UML source code}
+\par\par
+
+This diagram shows the complete flow from user registration through email processing to final wallet creation and ownership transfer.
+\par\par
+
+{\b\fs22 4.2 Email Processing Component Interaction}
+\par
+[UML DIAGRAM 3 PLACEHOLDER - Email Processing Components]\par
+{\i Note: See Appendix A for UML source code}
+\par\par
+
+This diagram illustrates how the email processing components interact to detect, process, and prepare emails for blockchain storage.
+\par\par
+
+{\b\fs22 4.3 User Authorization Flow}
+\par
+[UML DIAGRAM 4 PLACEHOLDER - User Authorization]\par
+{\i Note: See Appendix A for UML source code}
+\par\par
+
+This diagram shows the user authorization process including MetaMask integration and signature verification.
+\par\par
+
+{\b\fs22 4.4 Blockchain Transaction Flow}
+\par
+[UML DIAGRAM 5 PLACEHOLDER - Blockchain Transactions]\par
+{\i Note: See Appendix A for UML source code}
+\par\par
+
+This diagram details the smart contract interactions during the email wallet creation process.
+\par\par
+
+\page
+
+{\b\fs26 5. Security Model}
+\par\par
+
+{\b\fs22 5.1 Identity and Authentication Security}
+\par\par
+
+{\b Multi-Layer Identity Verification}
+\par
+{\f1\fs20 Identity Security Stack:
+├── Wallet-Based Identity
+│   ├── Ethereum wallet address as primary ID
+│   ├── Private key proves wallet ownership
+│   ├── No traditional username/password required
+│   └── Cryptographic signature verification
+├── Email Address Binding
+│   ├── Email-to-wallet mapping stored on-chain
+│   ├── Signature proves email ownership intent
+│   ├── One email per wallet enforcement
+│   └── Immutable binding after registration
+└── Service Authentication
+    ├── Service wallet with contract ownership
+    ├── Multi-signature capability for high-value operations
+    ├── Hardware Security Module (HSM) ready
+    └── Role-based access control (RBAC)}
+\f0\fs24
+\par\par
+
+{\b Authentication Flow Security}
+\par
+1. {\b User Registration:} User signs message containing email and wallet address\par
+2. {\b Signature Validation:} Service verifies cryptographic signature\par
+3. {\b Blockchain Recording:} Mapping stored immutably on-chain\par
+4. {\b Ongoing Verification:} Every operation requires signature proof\par\par
+
+{\b\fs22 5.2 Data Integrity and Provenance}
+\par\par
+
+{\b Content Integrity Protection}
+\par
+{\f1\fs20 Data Integrity Mechanisms:
+├── Cryptographic Hashing
+│   ├── SHA-256 hash of complete email content
+│   ├── Separate hashes for each attachment
+│   ├── Merkle tree for multi-attachment emails
+│   └── Hash stored immutably on blockchain
+├── IPFS Content Addressing
+│   ├── Content-addressed storage (CAS)
+│   ├── Distributed storage across nodes
+│   ├── Cryptographic verification of retrieval
+│   └── Redundant storage for availability
+└── Blockchain Immutability
+    ├── Email hash stored in smart contract
+    ├── Timestamp proof of storage
+    ├── Ownership transfer records
+    └── Complete audit trail}
+\f0\fs24
+\par\par
+
+{\b Tamper Detection}
+\par
+• {\b Pre-Storage:} Hash generated before blockchain storage\par
+• {\b Post-Storage:} Any content change produces different hash\par
+• {\b Verification:} Compare stored hash with current content hash\par
+• {\b Proof:} Mathematical impossibility of same hash for different content\par\par
+
+{\b\fs22 5.3 Access Control and Authorization}
+\par\par
+
+{\b Multi-Level Access Control}
+\par
+{\f1\fs20 Access Control Matrix:
+├── Contract Level
+│   ├── Owner-only functions (service operations)
+│   ├── User-only functions (authorization signing)
+│   ├── View functions (public data access)
+│   └── Emergency controls (pause/upgrade)
+├── Application Level
+│   ├── User wallet verification
+│   ├── Email ownership validation
+│   ├── Credit balance checking
+│   └── Rate limiting and DOS protection
+└── Infrastructure Level
+    ├── Network access controls
+    ├── API authentication
+    ├── Service-to-service security
+    └── Database access restrictions}
+\f0\fs24
+\par\par
+
+{\b Authorization Security Model}
+\par
+1. {\b Intent Verification:} User must explicitly authorize each email wallet\par
+2. {\b Signature Verification:} Cryptographic proof of authorization\par
+3. {\b Non-Repudiation:} Blockchain record prevents denial\par
+4. {\b Time-Bound:} Authorization requests expire (24 hours)\par\par
+
+{\b\fs22 5.4 Privacy and Confidentiality}
+\par\par
+
+{\b Privacy Protection Mechanisms}
+\par
+{\f1\fs20 Privacy Architecture:
+├── Data Minimization
+│   ├── Only essential data stored on-chain
+│   ├── Full content stored off-chain (IPFS)
+│   ├── Metadata selectively disclosed
+│   └── User controls data sharing
+├── Encryption Options
+│   ├── Email content encryption before IPFS
+│   ├── User-controlled encryption keys
+│   ├── Selective disclosure mechanisms
+│   └── Zero-knowledge proof capability
+└── Access Controls
+    ├── User owns wallet and controls access
+    ├── Granular permission system
+    ├── Audit trail of data access
+    └── Revocation capabilities}
+\f0\fs24
+\par\par
+
+{\b\fs22 5.5 Network and Infrastructure Security}
+\par\par
+
+{\b Security Infrastructure}
+\par
+{\f1\fs20 Infrastructure Security:
+├── Blockchain Security
+│   ├── Polygon network security model
+│   ├── Smart contract auditing
+│   ├── Gas optimization for DOS resistance
+│   └── Upgrade mechanisms with governance
+├── Service Security
+│   ├── HTTPS/TLS for all communications
+│   ├── API rate limiting and throttling
+│   ├── Input validation and sanitization
+│   └── Error handling without information leakage
+├── Storage Security
+│   ├── IPFS content addressing security
+│   ├── Distributed storage redundancy
+│   ├── Backup and recovery procedures
+│   └── Data retention policies
+└── Operational Security
+    ├── Monitoring and alerting systems
+    ├── Incident response procedures
+    ├── Security audit logging
+    └── Vulnerability management}
+\f0\fs24
+\par\par
+
+\page
+
+{\b\fs26 6. Email Provenance Verification}
+\par\par
+
+{\b\fs22 What We Can Prove About an Email Wallet}
+\par\par
+
+{\b\fs20 6.1 Content Integrity Proofs}
+\par\par
+
+{\b Cryptographic Content Verification}
+\par
+{\f1\fs20 Provable Facts:
+✓ Content has not been modified since wallet creation
+✓ Exact timestamp of email processing
+✓ Original email headers and metadata
+✓ Complete attachment inventory and integrity
+✓ IPFS storage location and retrieval hash}
+\f0\fs24
+\par\par
+
+{\b Mathematical Proof Structure:}
+\par
+• {\b Hash Function Property:} SHA-256(content) → unique 256-bit fingerprint\par
+• {\b Collision Resistance:} Computationally impossible to find different content with same hash\par
+• {\b Blockchain Immutability:} Hash stored permanently with timestamp\par
+• {\b Verification Process:} Re-hash current content, compare with stored hash\par\par
+
+{\b\fs20 6.2 Ownership and Authorization Proofs}
+\par\par
+
+{\b Wallet Ownership Chain}
+\par
+{\f1\fs20 Ownership Provenance:
+✓ Original email recipient wallet address
+✓ Cryptographic signature proving authorization intent
+✓ Blockchain transaction showing ownership transfer
+✓ Current owner wallet address
+✓ Complete ownership history with timestamps}
+\f0\fs24
+\par\par
+
+{\b Authorization Verification:}
+\par
+• {\b Signature Verification:} Proves wallet owner authorized wallet creation\par
+• {\b Message Authentication:} Specific authorization message signed\par
+• {\b Non-Repudiation:} Signer cannot deny authorization\par
+• {\b Timestamp Proof:} Exact time of authorization recorded\par\par
+
+{\b\fs20 6.3 Service Processing Proofs}
+\par\par
+
+{\b Email Processing Verification}
+\par
+{\f1\fs20 Service Operation Proofs:
+✓ Email received by monitored account (Microsoft Graph API logs)
+✓ Content extraction performed by verified service
+✓ Hash generation process auditable
+✓ IPFS upload transaction recorded
+✓ Blockchain transaction initiated by service wallet}
+\f0\fs24
+\par\par
+
+{\b Service Integrity Chain:}
+\par
+• {\b Service Identity:} Known service wallet address with proven ownership\par
+• {\b Operation Logging:} Complete audit trail of service operations\par
+• {\b Transaction Verification:} All blockchain operations traceable\par
+• {\b Process Transparency:} Open source processing algorithms\par\par
+
+{\b\fs20 6.4 Temporal Proofs}
+\par\par
+
+{\b Time-Based Verification}
+\par
+{\f1\fs20 Temporal Provenance:
+✓ Email reception timestamp (email headers)
+✓ Processing timestamp (service logs)
+✓ IPFS upload timestamp
+✓ Blockchain transaction timestamp
+✓ Authorization timestamp (user signature)}
+\f0\fs24
+\par\par
+
+{\b Timeline Integrity:}
+\par
+• {\b Email Headers:} Original timestamp from email system\par
+• {\b Service Processing:} Logged processing time\par
+• {\b Blockchain Time:} Block timestamp (immutable)\par
+• {\b Sequence Verification:} Logical order of operations\par\par
+
+{\b\fs22 What We Cannot Prove}
+\par\par
+
+{\b Limitations and Scope}
+\par
+{\f1\fs20 Cannot Prove:
+✗ Email authenticity before reaching monitored account
+✗ Sender identity verification (requires separate email authentication)
+✗ Email content truthfulness or accuracy
+✗ Compliance with regulations in sender's jurisdiction
+✗ Original composition device or location}
+\f0\fs24
+\par\par
+
+{\b Email System Dependencies:}
+\par
+• {\b Email Authentication:} Relies on email provider's authentication (SPF, DKIM, DMARC)\par
+• {\b Sender Verification:} Outside scope - email spoofing possible\par
+• {\b Content Truthfulness:} System verifies integrity, not accuracy\par
+• {\b Jurisdictional Compliance:} Cannot verify sender's legal compliance\par\par
+
+{\b\fs22 Verification API}
+\par\par
+
+{\b Proof Generation Endpoints}
+\par
+{\f1\fs20 // Email Wallet Verification API
+interface EmailWalletProof {
+  walletId: string;
+  contentHash: string;
+  ipfsHash: string;
+  ownerAddress: string;
+  creationTimestamp: number;
+  blockNumber: number;
+  transactionHash: string;
+  
+  // Verification Methods
+  verifyContentIntegrity(): boolean;
+  verifyOwnership(address: string): boolean;
+  verifyTimestamp(): boolean;
+  generateProofPackage(): ProofPackage;
+}
+
+// Usage Example
+const proof = await emailWalletService.getProof(walletId);
+const isValid = proof.verifyContentIntegrity();
+const proofPackage = proof.generateProofPackage();}
+\f0\fs24
+\par\par
+
+{\b Third-Party Verification}
+\par
+{\b Independent Verification Process:}
+\par
+1. {\b Retrieve Wallet Data:} Query blockchain for email wallet record\par
+2. {\b Download Content:} Fetch email content from IPFS using stored hash\par
+3. {\b Re-compute Hash:} Generate SHA-256 hash of retrieved content\par
+4. {\b Compare Hashes:} Verify computed hash matches blockchain record\par
+5. {\b Verify Signatures:} Validate all cryptographic signatures\par
+6. {\b Check Timestamps:} Verify temporal consistency\par\par
+
+{\b Verification Tools:}
+\par
+• Blockchain explorer integration\par
+• IPFS content verification\par
+• Cryptographic signature validation\par
+• Automated verification scripts\par\par
+
+\page
+
+{\b\fs26 7. Data Flow Analysis}
+\par\par
+
+{\b\fs22 7.1 Registration Data Flow}
+\par\par
+
+{\f1\fs20 Registration Process:
+User Wallet → Signature Generation → Service Validation → Blockchain Storage
+     ↓              ↓                     ↓                    ↓
+Email Address → Message Signing → Cryptographic Proof → Immutable Record
+     ↓              ↓                     ↓                    ↓
+User Intent → Authorization → Service Processing → Chain Confirmation}
+\f0\fs24
+\par\par
+
+{\b Data Transformations:}
+\par
+1. {\b Input:} User email + wallet address + signature\par
+2. {\b Validation:} Cryptographic signature verification\par
+3. {\b Processing:} Email-to-wallet mapping creation\par
+4. {\b Storage:} Blockchain transaction with gas payment\par
+5. {\b Output:} Registration confirmation + credit allocation\par\par
+
+{\b\fs22 7.2 Email Processing Data Flow}
+\par\par
+
+{\f1\fs20 Email Ingestion Flow:
+Email Source → Service Detection → Content Extraction → Hash Generation
+     ↓               ↓                    ↓                   ↓
+Raw Email → Structured Data → Content Hash → IPFS Storage
+     ↓               ↓                    ↓                   ↓
+Metadata → Processing Queue → Authorization Request → User Notification}
+\f0\fs24
+\par\par
+
+{\b Critical Data Points:}
+\par
+• {\b Content Hash:} Immutable fingerprint of email content\par
+• {\b IPFS Hash:} Distributed storage address\par
+• {\b Metadata:} Structured email information\par
+• {\b Authorization Token:} User-specific authorization identifier\par\par
+
+{\b\fs22 7.3 Authorization Data Flow}
+\par\par
+
+{\f1\fs20 Authorization Process:
+User Intent → MetaMask Signature → Blockchain Validation → Automated Processing
+     ↓              ↓                      ↓                       ↓
+Authorization → Cryptographic Proof → Smart Contract → Wallet Creation
+     ↓              ↓                      ↓                       ↓
+User Approval → Signature Verification → Credit Deduction → Ownership Transfer}
+\f0\fs24
+\par\par
+
+{\b State Transitions:}
+\par
+1. {\b Pending:} Authorization request created\par
+2. {\b Signed:} User provides cryptographic signature\par
+3. {\b Verified:} Smart contract validates signature\par
+4. {\b Processed:} Wallet created and ownership transferred\par
+5. {\b Complete:} User owns verified email wallet\par\par
+
+\page
+
+{\b\fs26 8. Deployment Architecture}
+\par\par
+
+{\b\fs22 Production Infrastructure}
+\par\par
+
+{\f1\fs20 Production Deployment:
+├── Frontend Layer
+│   ├── React.js Web Application
+│   ├── MetaMask Integration
+│   ├── Authorization Interface
+│   └── Wallet Management Dashboard
+├── API Layer
+│   ├── .NET 8 Web API
+│   ├── RESTful Endpoints
+│   ├── Authentication Middleware
+│   └── Rate Limiting
+├── Service Layer
+│   ├── Email Monitor Service
+│   ├── Blockchain Service
+│   ├── Content Processing Service
+│   └── Notification Service
+├── Storage Layer
+│   ├── PostgreSQL (User Data)
+│   ├── IPFS (Email Content)
+│   ├── Blockchain (Verification)
+│   └── Redis (Caching)
+└── Infrastructure Layer
+    ├── Docker Containers
+    ├── Kubernetes Orchestration
+    ├── Load Balancers
+    └── Monitoring Stack}
+\f0\fs24
+\par\par
+
+{\b\fs22 Security Deployment Considerations}
+\par\par
+
+{\b Network Security:}
+\par
+• TLS 1.3 for all communications\par
+• API Gateway with rate limiting\par
+• VPC isolation for sensitive services\par
+• WAF protection for web applications\par\par
+
+{\b Data Security:}
+\par
+• Encryption at rest for database\par
+• Encrypted IPFS storage option\par
+• Secure key management (Azure Key Vault)\par
+• Regular security audits\par\par
+
+{\b Operational Security:}
+\par
+• Container security scanning\par
+• Vulnerability management\par
+• Incident response procedures\par
+• Backup and disaster recovery\par\par
+
+\page
+
+{\b\fs26 9. Conclusion}
+\par\par
+
+The Email Wallet System provides a comprehensive solution for transforming email communications into verifiable blockchain assets. The architecture ensures:
+\par\par
+
+• {\b Cryptographic Integrity:} Mathematical proof of content authenticity\par
+• {\b Immutable Provenance:} Complete audit trail from email to wallet\par
+• {\b User Ownership:} Blockchain-verified ownership and control\par
+• {\b Scalable Security:} Multi-layer security model with defense in depth\par
+• {\b Regulatory Compliance:} Built-in audit trails and verification mechanisms\par\par
+
+The system's security model provides strong guarantees about email content integrity, ownership provenance, and temporal sequencing, while clearly documenting the limitations and scope of verification capabilities.
+\par\par
+
+For architecture teams, this document provides the foundation for understanding component relationships, security implications, and integration requirements for the Email Wallet system.
+\par\par
+
+\page
+
+{\b\fs26 Appendix A: UML Diagram Source Code}
+\par\par
+
+{\b\fs22 A.1 System-Level Interaction Diagram}
+\par\par
+
+{\f1\fs18 sequenceDiagram
+    participant U as User
+    participant E as Email System
+    participant S as Service Agent
+    participant BC as Blockchain
+    participant IPFS as IPFS Network
+    
+    Note over U,IPFS: Complete Email to Wallet Flow
+    
+    U->>S: Register wallet + email
+    S->>BC: registerEmailWallet()
+    BC-->>S: Registration confirmed
+    S-->>U: Registration success
+    
+    E->>S: New email detected
+    S->>S: Extract content + metadata
+    S->>IPFS: Store email content
+    IPFS-->>S: IPFS hash returned
+    
+    S->>BC: createAuthorizationRequest()
+    BC-->>S: Request ID generated
+    S->>U: Authorization notification
+    
+    U->>BC: authorizeEmailWalletCreation()
+    BC->>BC: Verify signature
+    BC->>BC: Create EmailDataWallet
+    BC->>BC: Transfer ownership to user
+    BC-->>U: Wallet created
+    
+    Note over U,IPFS: User now owns verified email wallet}
+\f0\fs24
+\par\par
+
+{\b\fs22 A.2 Email Processing Component Interaction}
+\par\par
+
+{\f1\fs18 sequenceDiagram
+    participant EMS as EmailMonitorService
+    participant CPS as ContentProcessingService
+    participant IPS as IPFSService
+    participant BCS as BlockchainService
+    participant SC as Smart Contracts
+    
+    Note over EMS,SC: Email Processing Pipeline
+    
+    EMS->>EMS: Poll for new emails
+    EMS->>CPS: Process email content
+    
+    CPS->>CPS: Extract headers/body
+    CPS->>CPS: Generate content hash
+    CPS->>CPS: Process attachments
+    CPS->>IPS: Upload to IPFS
+    
+    IPS->>IPS: Store content
+    IPS-->>CPS: Return IPFS hash
+    
+    CPS-->>BCS: Content ready for blockchain
+    BCS->>SC: createAuthorizationRequest()
+    SC-->>BCS: Request created
+    
+    Note over EMS,SC: Email content secured and request ready}
+\f0\fs24
+\par\par
+
+{\b\fs22 A.3 User Authorization Flow}
+\par\par
+
+{\f1\fs18 sequenceDiagram
+    participant U as User
+    participant UI as Web Interface
+    participant AS as Authorization Service
+    participant BC as Blockchain
+    participant WS as Wallet Service
+    
+    Note over U,WS: User Authorization Process
+    
+    AS->>U: Email notification
+    U->>UI: Access authorization page
+    UI->>AS: Load request details
+    AS-->>UI: Display email preview
+    
+    UI->>U: Show authorization request
+    U->>U: Review email content
+    U->>WS: Connect MetaMask
+    WS-->>U: Wallet connected
+    
+    U->>WS: Sign authorization
+    WS->>BC: authorizeEmailWalletCreation()
+    BC->>BC: Verify signature
+    BC->>BC: Execute wallet creation
+    BC-->>WS: Transaction confirmed
+    WS-->>U: Wallet created successfully
+    
+    Note over U,WS: User owns verified email wallet}
+\f0\fs24
+\par\par
+
+{\b\fs22 A.4 Blockchain Transaction Flow}
+\par\par
+
+{\f1\fs18 sequenceDiagram
+    participant S as Service
+    participant RM as Registration Manager
+    participant AM as Authorization Manager
+    participant EDW as EmailDataWallet
+    participant AW as AttachmentWallet
+    
+    Note over S,AW: Smart Contract Interaction
+    
+    S->>RM: Check user registration
+    RM-->>S: User verified
+    
+    S->>AM: createAuthorizationRequest()
+    AM->>AM: Generate request ID
+    AM->>RM: Verify user credits
+    RM-->>AM: Credits sufficient
+    AM-->>S: Request created
+    
+    Note over S,AW: User authorizes via signature
+    
+    S->>AM: authorizeEmailWalletCreation()
+    AM->>AM: Verify signature
+    AM->>EDW: createEmailWallet()
+    EDW->>EDW: Store email data
+    EDW-->>AM: Wallet created
+    
+    AM->>AW: createAttachmentWallet()
+    AW->>AW: Store attachment hashes
+    AW-->>AM: Attachments linked
+    
+    AM->>RM: deductCredits()
+    RM->>RM: Update balance
+    RM-->>AM: Credits deducted
+    
+    AM-->>S: Complete transaction
+    
+    Note over S,AW: Email wallet fully created and transferred}
+\f0\fs24
+\par\par
+
+{\b\fs22 A.5 High-Level Architecture Diagram}
+\par\par
+
+{\f1\fs18 graph TD
+    A[Email Source] --> B[Service Agent]
+    B --> C[Blockchain Verification]
+    D[User Wallet] --> E[Authorization Request]
+    E --> F[Service Processing]
+    F --> C
+    
+    subgraph "Email Sources"
+        A1[Office 365]
+        A2[SMTP/IMAP]
+        A3[Exchange]
+    end
+    
+    subgraph "Service Components"
+        B1[Graph API]
+        B2[Content Hash]
+        B3[IPFS Storage]
+    end
+    
+    subgraph "Blockchain Layer"
+        C1[Smart Contracts]
+        C2[Polygon Network]
+        C3[Event Logs]
+    end
+    
+    subgraph "User Interface"
+        D1[MetaMask]
+        D2[Hardware Wallet]
+        D3[Mobile Wallet]
+    end
+    
+    A --> A1
+    A --> A2
+    A --> A3
+    
+    B --> B1
+    B --> B2
+    B --> B3
+    
+    C --> C1
+    C --> C2
+    C --> C3
+    
+    D --> D1
+    D --> D2
+    D --> D3}
+\f0\fs24
+\par\par
+
+{\i End of Document}
+\par
+
+}

@@ -19,12 +19,31 @@ The SKS Rootz Platform follows the EPISTERY architectural pattern to provide a u
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### For Team Members (NPM Installation)
+```bash
+# Install the platform globally
+npm install -g @rootz-global/sks-rootz-platform
+
+# Initialize your development environment
+rootz-platform init --quick-start
+
+# Start the platform
+rootz-platform start
+
+# Check status
+rootz-platform status
+```
+
+**Platform available at:** `http://localhost:8000/.rootz/status`
+
+### For Server Deployment
+
+#### Prerequisites
 - Ubuntu 22.04 LTS server
 - Node.js 20+ LTS
 - Existing website/nginx setup
 
-### Installation
+#### Installation
 ```bash
 # Clone repository
 git clone https://github.com/rootz-global/sks-rootz-platform.git
@@ -37,7 +56,7 @@ sudo ./scripts/setup/ubuntu-server-setup.sh
 sudo ./scripts/deploy/deploy.sh --attach-to-website
 ```
 
-### Access
+#### Access
 After deployment, the platform provides:
 - **Service APIs:** `https://rootz.global/.rootz/`
 - **Client Library:** `https://rootz.global/.rootz/lib/rootz-client.js`

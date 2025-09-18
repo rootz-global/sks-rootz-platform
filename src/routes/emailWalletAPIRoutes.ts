@@ -283,7 +283,13 @@ router.get('/wallet/:walletId/email-data', async (req: Request, res: Response) =
     const authService = getSharedAuthService(req);
     const config = req.app.locals.config;
     const { ethers } = require('ethers');
-    const fetch = require('node-fetch');
+    // Use built-in Node.js fetch (Node 18+) as fallback
+    console.log('🔍 Debug: Checking fetch availability...');
+    console.log('globalThis.fetch available:', typeof globalThis.fetch);
+    console.log('require node-fetch available:', typeof require('node-fetch'));
+    
+    const fetch = globalThis.fetch || require('node-fetch');
+    console.log('Final fetch function type:', typeof fetch);
     
     // Initialize blockchain connection
     const rpcUrl = config.get('blockchain.rpcUrl', 'https://rpc-amoy.polygon.technology/');
