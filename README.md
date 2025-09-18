@@ -84,11 +84,24 @@ await rootz.attach(existingApp);
 
 ## 📚 Documentation
 
+### Architecture & Design
+- **[📋 Email Wallet System Architecture](docs/architecture/Email_Wallet_Architecture_Documentation.md)** - Complete technical architecture documentation with UML diagrams, security model, and component relationships
 - [EPISTERY Implementation](docs/architecture/epistery-implementation.md)
+
+### Deployment & Configuration
 - [Ubuntu Deployment Guide](docs/deployment/ubuntu-deployment.md)
 - [Website Integration](docs/deployment/website-integration.md)
 - [Configuration Guide](docs/deployment/configuration-guide.md)
+
+### API & Development
 - [API Reference](docs/api/)
+
+### Key Documentation Highlights
+- **System Overview:** Complete "math of ORIGIN" email-to-blockchain flow
+- **UML Diagrams:** 5 detailed interaction diagrams showing component relationships
+- **Security Model:** Multi-layer security architecture and cryptographic proofs
+- **Provenance Verification:** What we can prove about email wallet authenticity
+- **Component Analysis:** Detailed breakdown of each system component and chain data relationships
 
 ## 🛠️ Development
 
