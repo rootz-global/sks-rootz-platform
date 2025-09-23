@@ -1,6 +1,6 @@
-# SKS Rootz Platform
+# Rootz Platform - Email Data Wallet System
 
-> EPISTERY-style unified services platform for Email Wallet, Secrets Management, and AI Data Wallet
+> Email Data Wallet system for signing emails with data wallets, using shared `~/.rootz/config.ini` configuration system and OCI MySQL support
 
 ## 🎯 Overview
 
@@ -19,22 +19,141 @@ The SKS Rootz Platform follows the EPISTERY architectural pattern to provide a u
 
 ## 🚀 Quick Start
 
-### For Team Members (NPM Installation)
+### Prerequisites
+- Node.js 18+
+- MySQL database (OCI MySQL supported)
+- Configuration setup
+
+### Installation
+
 ```bash
-# Install the platform globally
-npm install -g @rootz-global/sks-rootz-platform
-
-# Initialize your development environment
-rootz-platform init --quick-start
-
-# Start the platform
-rootz-platform start
-
-# Check status
-rootz-platform status
+cd /home/msprague/workspace/rootz/rootz-platform
+npm install
 ```
 
-**Platform available at:** `http://localhost:8000/.rootz/status`
+### Configuration Setup
+
+The Rootz Platform uses a shared configuration system at `~/.rootz/` that can be used by multiple Rootz applications.
+
+1. Create configuration directories:
+```bash
+mkdir -p ~/.rootz/localhost
+```
+
+2. Copy and customize root configuration:
+```bash
+cp config-templates/rootz-config.ini ~/.rootz/config.ini
+```
+
+3. Copy and customize domain-specific configuration:
+```bash
+cp config-templates/localhost-domain.ini ~/.rootz/localhost/config.ini
+```
+
+4. Edit the configuration files with your settings:
+```bash
+nano ~/.rootz/config.ini           # Root/shared settings
+nano ~/.rootz/localhost/config.ini # Domain-specific settings
+```
+
+### Configuration Files
+
+The system uses a shared configuration directory that can be used by multiple Rootz applications:
+
+```
+~/.rootz/
+├── config.ini              # Root/shared configuration (all apps)
+├── localhost/              # Development environment
+│   └── config.ini         # Domain-specific overrides
+├── staging.rootz.global/   # Staging environment
+│   └── config.ini
+└── rootz.global/           # Production environment
+    └── config.ini
+```
+
+**Configuration Priority:**
+1. Environment variables (highest)
+2. Domain-specific config (`~/.rootz/{domain}/config.ini`)
+3. Root config (`~/.rootz/config.ini`) 
+4. Default values (lowest)
+
+### Running the Server
+
+```bash
+# Development mode
+npm run dev
+
+# Production mode  
+npm start
+
+# With external IPFS (recommended)
+IPFS_URL=https://rootz.digital/api/v0 npm start
+
+# With OCI database configured
+DATABASE_PASSWORD=your-password IPFS_URL=https://rootz.digital/api/v0 npm start
+```
+
+The server will start on:
+- HTTP: http://localhost:4080
+- HTTPS: https://localhost:4443 (if SSL certificates are configured)
+
+## 📋 Configuration Dependencies
+
+### Required Environment Variables / Configuration
+
+#### Database (OCI MySQL)
+- `DATABASE_HOST` - MySQL host (default: mysql.sub07192123581.rootzvcn.oraclevcn.com)
+- `DATABASE_PORT` - MySQL port (default: 3306)
+- `DATABASE_NAME` - Database name (default: rootz_platform)
+- `DATABASE_USERNAME` - Database username (default: admin)
+- `DATABASE_PASSWORD` - **Required** - Database password
+- `DATABASE_MAX_CONNECTIONS` - Connection pool size (default: 10)
+
+#### Platform Settings
+- `DOMAIN` - Domain name (default: localhost)
+- `PORT` - HTTP port (default: 4080)
+- `HTTPS_PORT` - HTTPS port (default: 4443)
+
+#### Blockchain (Optional)
+- `BLOCKCHAIN_SERVICE_WALLET_PRIVATE_KEY` - Service wallet private key
+- `BLOCKCHAIN_RPC_URL` - Blockchain RPC endpoint
+- `BLOCKCHAIN_NETWORK` - Network name (amoy, polygon, etc.)
+
+#### Email Services (Optional)
+- `EMAIL_GRAPH_TENANT_ID` - Microsoft Graph tenant ID
+- `EMAIL_GRAPH_CLIENT_ID` - Microsoft Graph client ID
+- `EMAIL_GRAPH_CLIENT_SECRET` - Microsoft Graph client secret
+
+#### IPFS (Optional)
+- `IPFS_URL` - IPFS API endpoint (default: https://rootz.digital/api/v0)
+- `IPFS_PINATA_API_KEY` - Pinata API key  
+- `IPFS_PINATA_SECRET_KEY` - Pinata secret key
+- `IPFS_PINATA_JWT` - Pinata JWT token
+
+## 🔧 OCI MySQL Configuration
+
+For the specified OCID: `ocid1.mysqldbsystem.oc1.iad.aaaaaaaahgyziw2hfzym6ryft3aorfo77xdvohs5yw3sstd4f4k2jdgibhoa`
+
+### Connection Configuration
+
+```ini
+[database]
+host=mysql.sub07192123581.rootzvcn.oraclevcn.com
+port=3306
+name=rootz_platform
+username=admin
+password=YOUR_OCI_MYSQL_PASSWORD
+maxConnections=20
+ssl=true
+```
+
+### Environment Variables (Recommended)
+
+```bash
+export DATABASE_HOST="mysql.sub07192123581.rootzvcn.oraclevcn.com"
+export DATABASE_PASSWORD="your-secure-password"
+export DATABASE_NAME="rootz_platform"
+```
 
 ### For Server Deployment
 
