@@ -1,0 +1,57 @@
+{
+  "specVersion": "1.2.0",
+  "schema": "ai-content",
+  "generated": "2026-02-22T12:00:00Z",
+  "canonical_url": "https://example.com/.well-known/ai/content",
+
+  "title": "Your Company — Site Content",
+  "summary": "Structured content from example.com for AI agent consumption.",
+
+  "pages": [
+    {
+      "path": "/about",
+      "title": "About Us",
+      "type": "page",
+      "purpose": "Company background and mission",
+      "assertionType": "factual",
+      "excerpt": "First 50 words of the page content go here...",
+      "contentHash": "sha256:COMPUTE_FROM_PLAIN_TEXT",
+      "lastModified": "2026-02-20T10:00:00Z"
+    },
+    {
+      "path": "/products",
+      "title": "Our Products",
+      "type": "page",
+      "purpose": "Product catalog and descriptions",
+      "assertionType": "factual",
+      "excerpt": "Product listing page content...",
+      "contentHash": "sha256:COMPUTE_FROM_PLAIN_TEXT",
+      "lastModified": "2026-02-18T08:00:00Z"
+    }
+  ],
+
+  "posts": [
+    {
+      "path": "/blog/latest-announcement",
+      "title": "Latest Announcement",
+      "type": "post",
+      "assertionType": "editorial",
+      "excerpt": "First 50 words of the blog post...",
+      "contentHash": "sha256:COMPUTE_FROM_PLAIN_TEXT",
+      "published": "2026-02-20",
+      "categories": ["Announcements"]
+    }
+  ],
+
+  "organization": {
+    "name": "Your Company Name",
+    "domain": "example.com"
+  },
+
+  "_signature": {
+    "contentHash": "sha256:COMPUTED_AT_SIGNING",
+    "signedAt": "2026-02-22T12:00:00Z",
+    "method": "hash-only",
+    "authorization": "none"
+  }
+}

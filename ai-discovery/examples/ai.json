@@ -1,0 +1,117 @@
+{
+  "$schema": "https://rootz.global/ai/schemas/ai-discovery-v1.2.json",
+  "specVersion": "1.2.0",
+  "standard": "rootz-ai-discovery",
+  "generated": "2026-02-22T12:00:00Z",
+
+  "organization": {
+    "name": "Your Company Name",
+    "domain": "example.com",
+    "tagline": "Short elevator pitch for AI agents",
+    "mission": "What your organization does and why it matters. 1-2 sentences.",
+    "sector": ["Technology"],
+    "legalName": "Your Company Inc.",
+    "founded": "2024",
+    "headquarters": "City, State, Country"
+  },
+
+  "contact": {
+    "email": "info@example.com",
+    "url": "https://example.com/contact",
+    "operator": "Jane Smith",
+    "ai_email": "ai@example.com",
+    "privacy_email": "privacy@example.com"
+  },
+
+  "aiSummary": "Your Company is a technology company that provides [specific service]. This site contains information about our products, team, and industry perspective. AI agents can use this data to answer questions about our organization, services, and published content.",
+
+  "coreConcepts": [
+    {
+      "term": "Your Key Product",
+      "definition": "What it does and why it matters"
+    },
+    {
+      "term": "Industry Term",
+      "definition": "How your organization defines or uses this term"
+    },
+    {
+      "term": "Proprietary Concept",
+      "definition": "A concept unique to your organization that AI should understand"
+    }
+  ],
+
+  "pages": [
+    {
+      "path": "/",
+      "title": "Home",
+      "purpose": "Company overview and primary navigation",
+      "contentHash": "sha256:COMPUTE_THIS"
+    },
+    {
+      "path": "/about",
+      "title": "About Us",
+      "purpose": "Company background, mission, and team",
+      "contentHash": "sha256:COMPUTE_THIS"
+    },
+    {
+      "path": "/products",
+      "title": "Products",
+      "purpose": "Product catalog and descriptions",
+      "contentHash": "sha256:COMPUTE_THIS"
+    },
+    {
+      "path": "/contact",
+      "title": "Contact",
+      "purpose": "Contact information and inquiry form",
+      "contentHash": "sha256:COMPUTE_THIS"
+    }
+  ],
+
+  "policies": {
+    "contentLicense": "cc-by-4.0",
+    "allowQuoting": true,
+    "allowTraining": false,
+    "attributionRequired": true,
+    "policyPages": {
+      "terms": "https://example.com/terms",
+      "privacy": "https://example.com/privacy"
+    }
+  },
+
+  "capabilities": {
+    "knowledge": true,
+    "feed": true,
+    "content": false,
+    "tools": {
+      "available": true,
+      "toolCount": 4,
+      "protocols": ["rest-api"],
+      "endpoint": "https://example.com/api/v1/tools"
+    }
+  },
+
+  "knowledge": {
+    "description": "Detailed organizational knowledge base",
+    "url": "https://example.com/.well-known/ai/knowledge",
+    "format": "json"
+  },
+
+  "feed": {
+    "description": "AI-optimized content feed",
+    "url": "https://example.com/.well-known/ai/feed",
+    "format": "json",
+    "frequency": "weekly"
+  },
+
+  "humanReadable": "https://example.com/about",
+
+  "_signature": {
+    "signer": "0xYOUR_WALLET_ADDRESS",
+    "contentHash": "sha256:COMPUTED_AT_SIGNING",
+    "signedAt": "2026-02-22T12:00:00Z",
+    "method": "ecdsa-secp256k1",
+    "signature": "0xCOMPUTED_AT_SIGNING",
+    "authorization": "self-signed",
+    "network": "polygon-mainnet"
+  }
+}

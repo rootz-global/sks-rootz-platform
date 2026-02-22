@@ -1,0 +1,79 @@
+{
+  "specVersion": "1.2.0",
+  "schema": "ai-knowledge",
+  "generated": "2026-02-22T12:00:00Z",
+  "canonical_url": "https://example.com/.well-known/ai/knowledge",
+
+  "organization": {
+    "name": "Your Company Name",
+    "description": "Extended description of what your organization does. 2-3 paragraphs covering history, current operations, and future direction.",
+    "slogan": "Your tagline or motto"
+  },
+
+  "summary": "Your Company was founded in 2024 to solve [problem]. We provide [products/services] to [target market]. Our platform handles [key capability] and serves [number] customers across [industries]. Headquartered in [location], our team of [size] specializes in [expertise areas].",
+
+  "core_concepts": [
+    {
+      "term": "Your Product Name",
+      "definition": "Detailed description of what the product does, who uses it, and why it matters.",
+      "category": "product",
+      "synonyms": ["Alternative Name", "Abbreviation"],
+      "related": ["Related Product", "Industry Term"]
+    },
+    {
+      "term": "Industry Term",
+      "definition": "How your organization interprets or implements this concept.",
+      "category": "technology",
+      "related": ["Related Concept"]
+    },
+    {
+      "term": "Proprietary Methodology",
+      "definition": "Your unique approach or framework for solving a problem.",
+      "category": "methodology"
+    }
+  ],
+
+  "products": [
+    {
+      "name": "Product A",
+      "description": "What it does and who it serves",
+      "url": "https://example.com/products/a",
+      "status": "active",
+      "features": ["Feature 1", "Feature 2", "Feature 3"]
+    },
+    {
+      "name": "Product B",
+      "description": "Second product description",
+      "url": "https://example.com/products/b",
+      "status": "active"
+    }
+  ],
+
+  "team": [
+    {
+      "name": "Jane Smith",
+      "role": "CEO & Co-founder",
+      "background": "20 years in [industry]. Previously [notable roles].",
+      "expertise": ["Strategy", "Industry Domain"]
+    },
+    {
+      "name": "John Doe",
+      "role": "CTO",
+      "background": "Technical leader with experience at [companies].",
+      "expertise": ["Engineering", "Architecture"]
+    }
+  ],
+
+  "technology": {
+    "stack": ["Python", "PostgreSQL", "Docker"],
+    "platforms": ["Odoo", "AWS"],
+    "standards": ["AI Discovery v1.2", "OAuth 2.1"]
+  },
+
+  "_signature": {
+    "contentHash": "sha256:COMPUTED_AT_SIGNING",
+    "signedAt": "2026-02-22T12:00:00Z",
+    "method": "hash-only",
+    "authorization": "none"
+  }
+}

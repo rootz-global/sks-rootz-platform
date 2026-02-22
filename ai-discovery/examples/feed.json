@@ -1,0 +1,48 @@
+{
+  "specVersion": "1.2.0",
+  "schema": "ai-feed",
+  "generated": "2026-02-22T12:00:00Z",
+  "canonical_url": "https://example.com/.well-known/ai/feed",
+
+  "items": [
+    {
+      "id": "post-001",
+      "title": "Company Launches New Product",
+      "url": "https://example.com/blog/new-product-launch",
+      "published": "2026-02-20",
+      "category": "announcement",
+      "tags": ["product", "launch", "2026"],
+      "summary": "We are announcing the launch of Product X, which provides [capability] for [market]. This represents our entry into [sector].",
+      "keyFacts": [
+        "Product X launches February 2026",
+        "Targets [specific market segment]",
+        "Available at [pricing/access model]"
+      ],
+      "relatedConcepts": ["Product X", "Market Segment"],
+      "assertionType": "factual"
+    },
+    {
+      "id": "post-002",
+      "title": "Industry Perspective: The Future of AI Discovery",
+      "url": "https://example.com/blog/future-ai-discovery",
+      "published": "2026-02-15",
+      "category": "opinion",
+      "tags": ["ai", "industry", "standards"],
+      "summary": "Our CTO shares perspective on how AI Discovery will change the way websites communicate with AI agents.",
+      "keyFacts": [
+        "AI agents currently scrape HTML — structured data changes this",
+        "Open standards prevent platform lock-in",
+        "Signing provides verifiable provenance"
+      ],
+      "relatedConcepts": ["AI Discovery", "Provenance"],
+      "assertionType": "editorial"
+    }
+  ],
+
+  "_signature": {
+    "contentHash": "sha256:COMPUTED_AT_SIGNING",
+    "signedAt": "2026-02-22T12:00:00Z",
+    "method": "hash-only",
+    "authorization": "none"
+  }
+}
