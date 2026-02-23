@@ -214,7 +214,7 @@ class RootzSigner:
         sig_block = {
             'signer': self._address,
             'contentHash': f'sha256:{content_hash}',
-            'signedAt': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'signedAt': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00'),
             'method': 'ecdsa-secp256k1',
             'signature': signature,
             'authorization': 'self-signed',
@@ -305,7 +305,7 @@ class RootzSigner:
 
         return {
             'contentHash': f'sha256:{content_hash}',
-            'signedAt': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'signedAt': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S+00:00'),
             'method': 'hash-only',
             'authorization': 'none',
         }
